@@ -28,7 +28,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, FileText, Save, Plus, AlertCircle, Loader2, History } from "lucide-react";
+import {
+  CalendarIcon,
+  FileText,
+  Save,
+  Plus,
+  AlertCircle,
+  Loader2,
+  History,
+  Trash2,
+} from "lucide-react";
 import { format } from "date-fns";
 import { id as indonesiaLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -41,13 +50,12 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 
-// Tipe data untuk histori laporan
 interface ReportHistoryRecord {
   id: string;
   report_date: string;
   shift_number: string;
   device_id: string;
-  device_name: string; 
+  device_name: string;
   total_sales: number;
 }
 
@@ -56,14 +64,11 @@ const DailyReport = () => {
   const [date, setDate] = useState<Date>(new Date());
   const [notes, setNotes] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(false); 
-  
-  const [reportHistory, setReportHistory] = useState<ReportHistoryRecord[]>([]);
-  // --- TAMBAHAN STATE VALIDASI ---
-  const [reportValidation, setReportValidation] = useState<Record<string, boolean>>({});
-  // -----------------------------
+  const [loadingData, setLoadingData] = useState(false);
 
-  // State untuk multi-device reports
+  const [reportHistory, setReportHistory] = useState<ReportHistoryRecord[]>([]);
+  const [reportValidation, setReportValidation] = useState<Record<string, boolean>>({});
+
   const [deviceReports, setDeviceReports] = useState<DeviceReport[]>([
     {
       id: uuidv4(),
@@ -77,113 +82,146 @@ const DailyReport = () => {
     },
   ]);
 
-  // Data statis untuk form (di-fetch dari Supabase)
-  const [availableDevices, setAvailableDevices] = useState<{ id: string; name: string }[]>([]);
-  const [availableAccounts, setAvailableAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [availableDevices, setAvailableDevices] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [availableAccounts, setAvailableAccounts] = useState<
+    { id: string; name: string }[]
+  >([]);
 
-
-  // Fungsi FETCH HISTORY (BARU)
+  // FETCH HISTORY
   const fetchReportHistory = useCallback(async () => {
     if (!employee) return;
     setLoading(true);
 
     try {
-        // PERBAIKAN: Memastikan select untuk devices berjalan lancar
-        const { data: historyData, error: historyError } = await supabase
-            .from("daily_reports")
-            .select(`
+      const { data: historyData, error: historyError } = await supabase
+        .from("daily_reports")
+        .select(
+          `
                 id,
                 report_date,
                 shift_number,
                 total_sales,
                 device_id,
                 devices ( device_id )
-            `)
-            .eq("employee_id", employee.id)
-            .order("report_date", { ascending: false })
-            .order("shift_number", { ascending: false })
-            .limit(10);
-            
-        if (historyError) throw historyError;
+            `
+        )
+        .eq("employee_id", employee.id)
+        .order("report_date", { ascending: false })
+        .order("shift_number", { ascending: false })
+        .limit(10);
 
-        const processedHistory: ReportHistoryRecord[] = (historyData as any[]).map(item => ({
-            id: item.id,
-            report_date: item.report_date,
-            shift_number: item.shift_number,
-            device_id: item.device_id,
-            device_name: item.devices?.device_id || 'Device Dihapus',
-            total_sales: item.total_sales,
-        }));
+      if (historyError) throw historyError;
 
-        setReportHistory(processedHistory);
+      const processedHistory: ReportHistoryRecord[] = (historyData as any[]).map(
+        (item) => ({
+          id: item.id,
+          report_date: item.report_date,
+          shift_number: item.shift_number,
+          device_id: item.device_id,
+          device_name: item.devices?.device_id || "Device Dihapus",
+          total_sales: item.total_sales,
+        })
+      );
 
+      setReportHistory(processedHistory);
     } catch (error: any) {
-        toast.error("Gagal memuat riwayat laporan.");
-        console.error("Error fetching report history:", error.message);
+      toast.error("Gagal memuat riwayat laporan.");
+      console.error("Error fetching report history:", error.message);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   }, [employee]);
 
-
-  // Fungsi untuk fetch devices dan accounts berdasarkan group_id karyawan
+  // FETCH DROPDOWN DATA
   useEffect(() => {
     const fetchDropdownData = async () => {
       if (!employee?.group_id) {
         setAvailableDevices([]);
         setAvailableAccounts([]);
         if (profile && !employee) {
-           toast.warning("Anda belum dialokasikan ke Group manapun. Harap hubungi Leader/Superadmin.");
+          toast.warning(
+            "Anda belum dialokasikan ke Group manapun. Harap hubungi Leader/Superadmin."
+          );
         }
         return;
       }
 
       setLoadingData(true);
       try {
-        // 1. Fetch devices berdasarkan group_id
+        // 1. Fetch devices
         const { data: devicesData, error: devicesError } = await supabase
-          .from('devices')
-          .select('id, device_id') 
-          .eq('group_id', employee.group_id);
-        
-        if (devicesError) throw devicesError;
-        
-        setAvailableDevices(devicesData.map(d => ({ 
-            id: d.id, 
-            name: d.device_id 
-        })) || []);
+          .from("devices")
+          .select("id, device_id")
+          .eq("group_id", employee.group_id);
 
-        // 2. Fetch accounts berdasarkan group_id
+        if (devicesError) throw devicesError;
+
+        setAvailableDevices(
+          devicesData.map((d) => ({
+            id: d.id,
+            name: d.device_id,
+          })) || []
+        );
+
+        // 2. Fetch accounts
         const { data: accountsData, error: accountsError } = await supabase
-          .from('accounts')
-          .select('id, username')
-          .eq('group_id', employee.group_id);
-          
+          .from("accounts")
+          .select("id, username")
+          .eq("group_id", employee.group_id);
+
         if (accountsError) throw accountsError;
 
-        setAvailableAccounts(accountsData.map(a => ({ 
-            id: a.id, 
-            name: a.username 
-        })) || []);
-        
+        setAvailableAccounts(
+          accountsData.map((a) => ({
+            id: a.id,
+            name: a.username,
+          })) || []
+        );
       } catch (error: any) {
         toast.error("Gagal memuat data device/akun.", {
-            description: "Pastikan Anda sudah dialokasikan ke group."
+          description: "Pastikan Anda sudah dialokasikan ke group.",
         });
         console.error("Error fetching dropdown data:", error.message);
       } finally {
         setLoadingData(false);
       }
     };
-    
+
     if (employee) {
       fetchDropdownData();
-      fetchReportHistory(); 
+      fetchReportHistory();
     }
   }, [employee, profile, fetchReportHistory]);
 
+  // Setup real-time subscription untuk report history
+  useEffect(() => {
+    if (!employee?.id) return;
 
-  // Handler untuk menambah device report baru
+    const subscription = supabase
+      .channel(`daily_reports_${employee.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "daily_reports",
+          filter: `employee_id=eq.${employee.id}`,
+        },
+        (payload) => {
+          console.log("Daily report changed:", payload);
+          fetchReportHistory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [employee?.id, fetchReportHistory]);
+
+  // ADD DEVICE REPORT
   const addDeviceReport = () => {
     if (deviceReports.length >= 10) {
       toast.warning("Anda sudah mencapai batas maksimum 10 device.");
@@ -203,26 +241,24 @@ const DailyReport = () => {
         closingBalance: 0,
       },
     ]);
-    // Tambahkan validasi awal (false)
-    setReportValidation(prev => ({ ...prev, [newId]: false }));
+    setReportValidation((prev) => ({ ...prev, [newId]: false }));
   };
 
-  // Handler untuk menghapus device report
+  // REMOVE DEVICE REPORT
   const removeDeviceReport = (id: string) => {
     if (deviceReports.length <= 1) {
       toast.error("Minimal harus ada 1 laporan device.");
       return;
     }
     setDeviceReports(deviceReports.filter((report) => report.id !== id));
-    // Hapus status validasi
-    setReportValidation(prev => {
-        const newState = { ...prev };
-        delete newState[id];
-        return newState;
+    setReportValidation((prev) => {
+      const newState = { ...prev };
+      delete newState[id];
+      return newState;
     });
   };
 
-  // Handler untuk update data di child component
+  // UPDATE DEVICE REPORT
   const updateDeviceReport = (
     id: string,
     field: keyof DeviceReport,
@@ -234,17 +270,16 @@ const DailyReport = () => {
       )
     );
   };
-  
-  // --- FUNGSI BARU: UPDATE VALIDASI ---
-  const handleDeviceValidation = (id: string, isValid: boolean) => {
-      setReportValidation(prev => ({ ...prev, [id]: isValid }));
-  };
-  
-  const isAllValid = Object.values(reportValidation).every(Boolean) && deviceReports.length > 0;
-  // ---------------------------------
-  
 
-  // FUNGSI HANDLE SUBMIT
+  // HANDLE VALIDATION
+  const handleDeviceValidation = (id: string, isValid: boolean) => {
+    setReportValidation((prev) => ({ ...prev, [id]: isValid }));
+  };
+
+  const isAllValid =
+    Object.values(reportValidation).every(Boolean) && deviceReports.length > 0;
+
+  // HANDLE SUBMIT
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -252,74 +287,71 @@ const DailyReport = () => {
       toast.error("Gagal memuat data karyawan. Silakan login ulang.");
       return;
     }
-    
-    // Final check validasi
-    if (!isAllValid) {
-         toast.error("Terdapat data laporan yang belum lengkap atau tidak valid.", {
-             description: "Mohon periksa semua field yang bertanda (*) dan pastikan Omset Akhir ≥ Omset Awal."
-         });
-         return;
-    }
 
+    if (!isAllValid) {
+      toast.error("Terdapat data laporan yang belum lengkap atau tidak valid.", {
+        description:
+          "Mohon periksa semua field yang bertanda (*) dan pastikan Omset Akhir ≥ Omset Awal.",
+      });
+      return;
+    }
 
     setLoading(true);
     toast.info("Sedang mengirim laporan...");
 
     try {
       const formattedDate = format(date, "yyyy-MM-dd");
-      
-      const shiftStatusEnum = (report: DeviceReport) => 
-        report.liveStatus === 'Lancar' ? 'smooth' : 'dead_relive';
-      
+
+      const shiftStatusEnum = (report: DeviceReport) =>
+        report.liveStatus === "Lancar" ? "smooth" : "dead_relive";
+
       const reportPayloads = deviceReports.map((report) => ({
-        employee_id: employee.id, 
+        employee_id: employee.id,
         report_date: formattedDate,
-        
-        shift_status: shiftStatusEnum(report), 
-        
+        shift_status: shiftStatusEnum(report),
         opening_balance: report.openingBalance,
         closing_balance: report.closingBalance,
         total_sales: report.closingBalance - report.openingBalance,
-        notes: notes, 
-        device_id: report.deviceId, 
-        account_id: report.accountId, 
-        shift_number: report.shift, // Nomor shift (1, 2, 3)
-        live_status: report.liveStatus, // Status Live (Lancar/Mati/Relive)
-        kategori_produk: report.kategoriProduk, // Kategori Produk
+        notes: notes,
+        device_id: report.deviceId,
+        account_id: report.accountId,
+        shift_number: report.shift,
+        live_status: report.liveStatus,
+        kategori_produk: report.kategoriProduk,
       }));
 
-      // KUNCI PENTING: Gunakan 3 kolom sebagai konflik untuk memungkinkan UPSERT multi-device di hari yang sama
+      // UPSERT dengan conflict strategy
       const { error: deviceError } = await supabase
         .from("daily_reports")
-        .upsert(reportPayloads as any, { 
-             onConflict: 'employee_id, report_date, device_id',
-             ignoreDuplicates: false,
+        .upsert(reportPayloads as any, {
+          onConflict: "employee_id, report_date, device_id",
+          ignoreDuplicates: false,
         });
 
       if (deviceError) throw deviceError;
 
-      // --- PERBAIKAN LOGIKA ABSENSI ---
-      // Gunakan UPSERT untuk mencatat check_out.
+      // UPDATE ATTENDANCE (Check-out otomatis)
       const { error: attendanceError } = await supabase
-        .from('attendance')
+        .from("attendance")
         .upsert(
           {
             employee_id: employee.id,
             attendance_date: formattedDate,
             check_out: new Date().toISOString(),
-            status: 'present', 
+            status: "present",
           },
           {
-            onConflict: 'employee_id, attendance_date',
+            onConflict: "employee_id, attendance_date",
           }
         );
+
       if (attendanceError) throw attendanceError;
-      // --- AKHIR PERBAIKAN ---
 
       toast.success("Laporan harian berhasil dikirim!");
       toast.info("Absen keluar Anda telah otomatis tercatat.");
 
-      fetchReportHistory(); 
+      // Refresh history (real-time akan trigger juga)
+      fetchReportHistory();
 
       // Reset form
       setNotes("");
@@ -336,7 +368,6 @@ const DailyReport = () => {
           closingBalance: 0,
         },
       ]);
-      // Reset validasi
       setReportValidation({ [initialReportId]: false });
     } catch (error: any) {
       console.error(error);
@@ -348,14 +379,24 @@ const DailyReport = () => {
     }
   };
 
-  // Hitung total omset dari semua device
+  // CALCULATE TOTAL OMSET
   const totalOmset = deviceReports.reduce(
     (acc, report) => acc + (report.closingBalance - report.openingBalance),
     0
   );
-  
+
   const formatDateOnly = (dateString: string) => {
-    return format(new Date(dateString + "T00:00:00"), "dd MMM yyyy", { locale: indonesiaLocale });
+    return format(new Date(dateString + "T00:00:00"), "dd MMM yyyy", {
+      locale: indonesiaLocale,
+    });
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(value);
   };
 
   return (
@@ -374,7 +415,7 @@ const DailyReport = () => {
           </div>
         </div>
 
-        {/* Master Info Card */}
+        {/* MASTER INFO CARD */}
         <Card>
           <CardHeader>
             <CardTitle>Informasi Laporan</CardTitle>
@@ -386,7 +427,7 @@ const DailyReport = () => {
             <div className="grid gap-4 md:grid-cols-3">
               {/* Tanggal Laporan */}
               <div className="space-y-2">
-                <Label htmlFor="date">Tanggal Laporan</Label>
+                <Label htmlFor="date">Tanggal Laporan *</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -415,7 +456,7 @@ const DailyReport = () => {
                 </Popover>
               </div>
 
-              {/* Auto-fill Nama */}
+              {/* Nama Karyawan */}
               <div className="space-y-2">
                 <Label htmlFor="employee-name">Nama Karyawan</Label>
                 <Input
@@ -427,12 +468,12 @@ const DailyReport = () => {
                 />
               </div>
 
-              {/* Auto-fill Group */}
+              {/* Group */}
               <div className="space-y-2">
                 <Label htmlFor="employee-group">Group</Label>
-                 <Input
+                <Input
                   id="employee-group"
-                  value={employee?.group_id || "Memuat..."} 
+                  value={employee?.group_id || "Memuat..."}
                   disabled
                   readOnly
                   className="bg-muted/50"
@@ -446,13 +487,15 @@ const DailyReport = () => {
         </Card>
 
         {loadingData && (
-            <div className="flex justify-center items-center h-20">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <span className="ml-2 text-muted-foreground">Memuat daftar Device & Akun...</span>
-            </div>
+          <div className="flex justify-center items-center h-20">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">
+              Memuat daftar Device & Akun...
+            </span>
+          </div>
         )}
 
-        {/* Multi-Device Report Forms */}
+        {/* MULTI-DEVICE REPORT FORMS */}
         <div className="space-y-4">
           {deviceReports.map((report, index) => (
             <DeviceReportForm
@@ -464,12 +507,12 @@ const DailyReport = () => {
               onRemove={removeDeviceReport}
               devices={availableDevices}
               accounts={availableAccounts}
-              onValidate={handleDeviceValidation} // <-- PASS FUNGSI VALIDASI
+              onValidate={handleDeviceValidation}
             />
           ))}
         </div>
 
-        {/* Tombol Tambah Device */}
+        {/* TOMBOL TAMBAH DEVICE */}
         <Button
           type="button"
           variant="outline"
@@ -481,22 +524,18 @@ const DailyReport = () => {
           Tambah Laporan Device (Max 10)
         </Button>
 
-        {/* Summary & Submit */}
+        {/* SUMMARY & SUBMIT */}
         <Card>
           <CardHeader>
             <CardTitle>Ringkasan Laporan</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Total Omset Hari Ini */}
+              {/* Total Omset */}
               <div className="space-y-2">
                 <Label>Total Omset Keseluruhan</Label>
                 <Input
-                  value={new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    minimumFractionDigits: 0,
-                  }).format(totalOmset)}
+                  value={formatCurrency(totalOmset)}
                   readOnly
                   disabled
                   className="text-2xl font-bold h-12 border-none bg-transparent p-0"
@@ -506,7 +545,7 @@ const DailyReport = () => {
               {/* Catatan */}
               <div className="space-y-2">
                 <Label htmlFor="notes">Catatan (Opsional)</Label>
-                <Input 
+                <Input
                   id="notes"
                   placeholder="Tambah catatan tentang laporan hari ini..."
                   value={notes}
@@ -517,86 +556,85 @@ const DailyReport = () => {
           </CardContent>
           <CardFooter className="flex-col items-start gap-4">
             <div className="flex gap-2">
-              <Button 
-                 type="submit" 
-                 className="gap-2" 
-                 disabled={loading || loadingData || !isAllValid} // <-- GUNAKAN isAllValid
+              <Button
+                type="submit"
+                className="gap-2"
+                disabled={loading || loadingData || !isAllValid}
               >
                 <Save className="h-4 w-4" />
                 {loading ? "Menyimpan..." : "Kirim Laporan & Absen Keluar"}
               </Button>
             </div>
             {!isAllValid && (
-                <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                    <AlertCircle className="h-5 w-5" />
-                    <p>
-                        Laporan **belum lengkap** atau **tidak valid**. Harap periksa semua *field* yang wajib diisi.
-                    </p>
-                </div>
+              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive w-full">
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <p>
+                  Laporan <strong>belum lengkap</strong> atau <strong>tidak valid</strong>.
+                  Harap periksa semua <strong>field</strong> yang wajib diisi.
+                </p>
+              </div>
             )}
-            <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary">
-              <AlertCircle className="h-5 w-5" />
+            <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary w-full">
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
               <p>
                 Mengirim laporan ini akan otomatis mencatat{" "}
-                <strong>Absen Keluar</strong> Anda untuk hari ini[cite: 3].
+                <strong>Absen Keluar</strong> Anda untuk hari ini.
               </p>
             </div>
           </CardFooter>
         </Card>
-        
-        {/* --- RIWAYAT LAPORAN BARU --- */}
+
+        {/* RIWAYAT LAPORAN */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5"/> Riwayat 10 Laporan Terakhir
+              <History className="h-5 w-5" /> Riwayat 10 Laporan Terakhir
             </CardTitle>
             <CardDescription>
-                Laporan harian yang telah Anda kirim (terbaru di atas).
+              Laporan harian yang telah Anda kirim (terbaru di atas).
             </CardDescription>
           </CardHeader>
           <CardContent>
-             {loading && reportHistory.length === 0 ? (
-                <div className="flex justify-center items-center h-40">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
+            {loading && reportHistory.length === 0 ? (
+              <div className="flex justify-center items-center h-40">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
             ) : reportHistory.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">
-                    Belum ada riwayat laporan harian yang dicatat.
-                </p>
+              <p className="text-center text-muted-foreground py-4">
+                Belum ada riwayat laporan harian yang dicatat.
+              </p>
             ) : (
-                <div className="border rounded-md">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Tanggal</TableHead>
-                                <TableHead>Shift</TableHead>
-                                <TableHead>Device</TableHead>
-                                <TableHead className="text-right">Omset (IDR)</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {reportHistory.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell>{formatDateOnly(item.report_date)}</TableCell>
-                                    <TableCell><Badge variant="secondary">Shift {item.shift_number}</Badge></TableCell>
-                                    <TableCell className="font-medium">{item.device_name}</TableCell>
-                                    <TableCell className="text-right font-semibold">
-                                        {new Intl.NumberFormat("id-ID", {
-                                            style: "currency",
-                                            currency: "IDR",
-                                            minimumFractionDigits: 0,
-                                        }).format(item.total_sales)}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
+              <div className="border rounded-md overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Shift</TableHead>
+                      <TableHead>Device</TableHead>
+                      <TableHead className="text-right">Omset (IDR)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportHistory.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{formatDateOnly(item.report_date)}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Shift {item.shift_number}</Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {item.device_name}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {formatCurrency(item.total_sales)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
-        {/* --- AKHIR RIWAYAT LAPORAN BARU --- */}
-        
       </form>
     </MainLayout>
   );

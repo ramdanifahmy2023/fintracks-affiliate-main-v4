@@ -31,7 +31,8 @@ import {
   Loader2, 
   Eye, 
   Download,
-  Search 
+  Search,
+  Upload, // <-- 1. IMPORT IKON BARU
 } from "lucide-react";
 import { Input } from "@/components/ui/input"; 
 import { Label } from "@/components/ui/label"; 
@@ -50,8 +51,7 @@ import { EditEmployeeDialog } from "@/components/Employee/EditEmployeeDialog";
 import { DeleteEmployeeAlert } from "@/components/Employee/DeleteEmployeeAlert"; 
 import { EmployeeDetailDialog } from "@/components/Employee/EmployeeDetailDialog";
 import { useExport } from "@/hooks/useExport"; 
-// --- MODIFIKASI: Tambahkan useSearchParams ---
-import { useSearchParams } from "react-router-dom"; 
+import { BulkImportDialog } from "@/components/Employee/BulkImportDialog"; // <-- 2. IMPORT DIALOG BARU
 
 // Tipe data gabungan - DIPERBARUI
 export interface EmployeeProfile {
@@ -66,33 +66,42 @@ export interface EmployeeProfile {
   position: string | null;
   group_name: string | null;
   group_id: string | null; 
-  // --- TAMBAHAN BARU ---
   date_of_birth: string | null;
   address: string | null;
-  // --------------------
 }
 
-// --- 2. TIPE DATA BARU UNTUK FILTER ---
+// TIPE DATA BARU UNTUK FILTER
 type Group = {
   id: string;
   name: string;
 };
-// Daftar statis untuk filter (sesuai blueprint/supabase enum)
 const roles = ["superadmin", "leader", "admin", "staff", "viewer"];
 const statuses = ["active", "inactive"];
-// ------------------------------------
+
+// --- 3. REFACTOR STATE DIALOG (MENGHAPUS useSearchParams) ---
+type DialogState = {
+  add: boolean;
+  edit: EmployeeProfile | null;
+  delete: EmployeeProfile | null;
+  detail: EmployeeProfile | null;
+  import: boolean; // Tambah state import
+};
+// -----------------------------------------------------------
 
 const Employees = () => {
   const { profile } = useAuth(); 
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   
-  // --- PERUBAHAN: Gunakan useSearchParams untuk mengelola state dialog Add ---
-  const [searchParams, setSearchParams] = useSearchParams();
-  
-  // Dapatkan status dialog dari URL
-  const isAddDialogOpen = searchParams.get('dialog') === 'add-employee';
-  // -------------------------------------------------------------------------
+  // --- 4. GUNAKAN STATE DIALOG BARU ---
+  const [dialogs, setDialogs] = useState<DialogState>({
+    add: false,
+    edit: null,
+    delete: null,
+    detail: null,
+    import: false,
+  });
+  // ------------------------------------
   
   // State filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,15 +110,9 @@ const Employees = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   
-  // State untuk dialog lainnya (tetap useState)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false); 
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeProfile | null>(null);
-
   const { exportToPDF, exportToCSV, isExporting } = useExport();
 
-  // --- 4. MODIFIKASI FUNGSI FETCH DATA (SERVER-SIDE FILTERING) ---
+  // (Fungsi fetchEmployees, fetchGroups, useEffects tetap sama)
   const fetchEmployees = useCallback(async (
     search: string, 
     groupId: string, 
@@ -141,7 +144,6 @@ const Employees = () => {
         `)
         .order('created_at', { ascending: true });
 
-      // Terapkan filter
       if (search.trim() !== "") {
         query = query.ilike('profiles.full_name', `%${search.trim()}%`);
       }
@@ -158,7 +160,6 @@ const Employees = () => {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
       const formattedData: EmployeeProfile[] = data.map((emp: any) => ({
@@ -185,9 +186,8 @@ const Employees = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // <-- useCallback
+  }, []);
 
-  // --- 5. USEEFFECT UNTUK FETCH DATA GROUPS (SAAT MOUNT) ---
   useEffect(() => {
     const fetchGroups = async () => {
       const { data } = await supabase.from("groups").select("id, name");
@@ -198,7 +198,6 @@ const Employees = () => {
     fetchGroups();
   }, []);
 
-  // --- 6. USEEFFECT UNTUK MEMANGGIL FETCH DATA SAAT FILTER BERUBAH ---
   useEffect(() => {
     fetchEmployees(searchTerm, filterGroup, filterRole, filterStatus);
   }, [fetchEmployees, searchTerm, filterGroup, filterRole, filterStatus]);
@@ -207,56 +206,34 @@ const Employees = () => {
   const canManage = profile?.role === "superadmin" || profile?.role === "leader";
   const canDelete = profile?.role === "superadmin";
 
-
   const getAvatarFallback = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  // --- HANDLER BARU: Buka Add Dialog dengan URL Parameter ---
-  const handleOpenAdd = () => {
-    setSearchParams(prev => {
-        prev.set('dialog', 'add-employee'); // <-- SET URL PARAMETER
-        return prev;
-    }, { replace: true });
-  }
-
-  // Handlers untuk Dialog (Modifikasi closeAllModals)
-  const handleOpenDetail = (employee: EmployeeProfile) => {
-    setSelectedEmployee(employee);
-    setIsDetailOpen(true);
-  };
-  const handleOpenEdit = (employee: EmployeeProfile) => {
-    setSelectedEmployee(employee);
-    setIsEditDialogOpen(true);
-  };
-  const handleOpenDelete = (employee: EmployeeProfile) => {
-    setSelectedEmployee(employee);
-    setIsAlertOpen(true);
-  };
+  // --- 5. PERBARUI SEMUA FUNGSI HANDLE DIALOG ---
+  const handleOpenAdd = () => setDialogs(prev => ({ ...prev, add: true }));
+  const handleOpenImport = () => setDialogs(prev => ({ ...prev, import: true }));
+  const handleOpenDetail = (employee: EmployeeProfile) => setDialogs(prev => ({ ...prev, detail: employee }));
+  const handleOpenEdit = (employee: EmployeeProfile) => setDialogs(prev => ({ ...prev, edit: employee }));
+  const handleOpenDelete = (employee: EmployeeProfile) => setDialogs(prev => ({ ...prev, delete: employee }));
   
   const closeAllModals = () => {
-    // Hapus query parameter 'dialog' jika dialog Add sedang dibuka
-    if (isAddDialogOpen) {
-        setSearchParams(prev => {
-            prev.delete('dialog'); // <-- HAPUS URL PARAMETER
-            return prev;
-        }, { replace: true });
-    }
-    
-    // Logika penutupan modal lain tetap sama
-    setIsEditDialogOpen(false);
-    setIsAlertOpen(false);
-    setIsDetailOpen(false); 
-    setSelectedEmployee(null);
+    setDialogs({
+      add: false,
+      edit: null,
+      delete: null,
+      detail: null,
+      import: false,
+    });
   };
   
   const handleSuccess = () => {
     closeAllModals();
-    // Panggil ulang fetch dengan filter saat ini
     fetchEmployees(searchTerm, filterGroup, filterRole, filterStatus); 
   };
+  // --------------------------------------------------
   
-  // Handle Export (Data 'employees' sudah terfilter)
+  // (Fungsi handleExport tetap sama)
   const handleExport = (type: 'pdf' | 'csv') => {
     const columns = [
       { header: 'Nama Lengkap', dataKey: 'full_name' },
@@ -320,16 +297,25 @@ const Employees = () => {
                   </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* --- 6. TAMBAHKAN TOMBOL IMPORT --- */}
             {canManage && (
-              <Button className="gap-2" onClick={handleOpenAdd}> {/* <-- Panggil Handler Baru */}
-                <PlusCircle className="h-4 w-4" />
-                Tambah Karyawan
-              </Button>
+              <>
+                <Button variant="outline" className="gap-2" onClick={handleOpenImport}>
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </Button>
+                <Button className="gap-2" onClick={handleOpenAdd}>
+                  <PlusCircle className="h-4 w-4" />
+                  Tambah Karyawan
+                </Button>
+              </>
             )}
+            {/* ---------------------------------- */}
           </div>
         </div>
 
-        {/* --- 7. UI FILTER BARU --- */}
+        {/* --- UI FILTER (Tetap sama) --- */}
         <Card>
           <CardHeader>
             <div className="flex flex-col md:flex-row gap-4">
@@ -401,8 +387,7 @@ const Employees = () => {
         </Card>
         {/* ------------------------- */}
 
-
-        {/* Card Tabel Karyawan */}
+        {/* Card Tabel Karyawan (Tetap sama) */}
         <Card>
           <CardHeader>
             <CardTitle>Daftar Karyawan</CardTitle>
@@ -430,7 +415,6 @@ const Employees = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Menggunakan state 'employees' yang sudah terfilter */}
                     {employees.map((emp) => (
                       <TableRow key={emp.id}>
                         <TableCell>
@@ -521,37 +505,45 @@ const Employees = () => {
         </Card>
       </div>
 
+      {/* --- 7. RENDER SEMUA DIALOG DENGAN STATE BARU --- */}
       <AddEmployeeDialog
-        isOpen={isAddDialogOpen}
+        isOpen={dialogs.add}
         onClose={closeAllModals}
         onSuccess={handleSuccess}
       />
+      
+      <BulkImportDialog
+        open={dialogs.import}
+        onOpenChange={closeAllModals}
+        onSuccess={handleSuccess}
+      />
 
-      {selectedEmployee && (
+      {dialogs.edit && (
         <EditEmployeeDialog
-          isOpen={isEditDialogOpen}
+          isOpen={!!dialogs.edit}
           onClose={closeAllModals}
           onSuccess={handleSuccess}
-          employeeToEdit={selectedEmployee}
+          employeeToEdit={dialogs.edit}
         />
       )}
 
-      {selectedEmployee && (
+      {dialogs.delete && (
         <DeleteEmployeeAlert
-          isOpen={isAlertOpen}
+          isOpen={!!dialogs.delete}
           onClose={closeAllModals}
           onSuccess={handleSuccess}
-          employeeToDelete={selectedEmployee}
+          employeeToDelete={dialogs.delete}
         />
       )}
       
-      {selectedEmployee && (
+      {dialogs.detail && (
         <EmployeeDetailDialog
-          isOpen={isDetailOpen}
+          isOpen={!!dialogs.detail}
           onClose={closeAllModals}
-          employee={selectedEmployee}
+          employee={dialogs.detail}
         />
       )}
+      {/* ----------------------------------------------- */}
     </MainLayout>
   );
 };
