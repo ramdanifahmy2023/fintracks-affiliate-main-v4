@@ -45,8 +45,6 @@ import { formatCurrencyInput, parseCurrencyInput } from "@/lib/utils";
 // Skema Zod
 const periods = ["M1", "M2", "M3", "M4", "M5"] as const;
 
-// --- 2. HAPUS HELPER LOKAL ---
-
 // Skema validasi Zod
 const commissionFormSchema = z.object({
   account_id: z.string().uuid({ message: "Akun wajib dipilih." }),

@@ -43,21 +43,64 @@ const DashboardStats = () => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const fetchDashboardData = async () => {
+    setIsLoading(true);
     try {
-      // Fetch commission data
+      // Dapatkan awal dan akhir bulan ini
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      // Akhir bulan ini (untuk menghindari data yang baru terinput di awal bulan depan)
+      const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString(); 
+      
+      // Dapatkan awal dan akhir bulan sebelumnya
+      const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const startOfPrevMonth = previousMonth.toISOString();
+      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
+
+
+      // --- 1. Fetch commission data (Bulan Ini) ---
       const { data: commissions } = await supabase
         .from('commissions')
-        .select('gross_commission, net_commission, paid_commission, created_at')
-        .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+        // Ganti created_at dengan payment_date untuk data komisi
+        .select('gross_commission, net_commission, paid_commission, payment_date')
+        .gte('payment_date', startOfThisMonth) // Filter berdasarkan tanggal pembayaran
+        .lte('payment_date', endOfThisMonth);
 
-      // Fetch expenses
+      // --- 2. Fetch expenses (Bulan Ini) ---
       const { data: expenses } = await supabase
         .from('cashflow')
-        .select('amount, created_at')
+        .select('amount')
         .eq('type', 'expense')
-        .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+        .gte('transaction_date', startOfThisMonth) // Filter berdasarkan tanggal transaksi
+        .lte('transaction_date', endOfThisMonth);
 
-      // Fetch employees count
+      // --- 3. Hitung Totals Bulan Ini ---
+      const grossTotal = commissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
+      const netTotal = commissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
+      const paidTotal = commissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
+      const expensesTotal = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+      // --- 4. Fetch commission data (Bulan Sebelumnya) ---
+      const { data: prevCommissions } = await supabase
+        .from('commissions')
+        .select('gross_commission, net_commission, paid_commission')
+        .gte('payment_date', startOfPrevMonth) 
+        .lte('payment_date', endOfPrevMonth);
+
+      // --- 5. Fetch expenses (Bulan Sebelumnya) ---
+      const { data: prevExpenses } = await supabase
+        .from('cashflow')
+        .select('amount')
+        .eq('type', 'expense')
+        .gte('transaction_date', startOfPrevMonth)
+        .lte('transaction_date', endOfPrevMonth);
+
+      // --- 6. Hitung Totals Bulan Sebelumnya ---
+      const prevGrossTotal = prevCommissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
+      const prevNetTotal = prevCommissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
+      const prevPaidTotal = prevCommissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
+      const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+      // Fetch counts (tidak perlu filter tanggal)
       const { count: employeesCount } = await supabase
         .from('employees')
         .select('*', { count: 'exact', head: true });
@@ -72,35 +115,7 @@ const DashboardStats = () => {
         .from('accounts')
         .select('*', { count: 'exact', head: true })
         .eq('account_status', 'active');
-
-      // Calculate totals
-      const grossTotal = commissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
-      const netTotal = commissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
-      const paidTotal = commissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
-      const expensesTotal = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
-
-      // Calculate previous month data for trends
-      const previousMonth = new Date();
-      previousMonth.setMonth(previousMonth.getMonth() - 1);
-      
-      const { data: prevCommissions } = await supabase
-        .from('commissions')
-        .select('gross_commission, net_commission, paid_commission')
-        .gte('created_at', new Date(previousMonth.getFullYear(), previousMonth.getMonth(), 1).toISOString())
-        .lt('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
-
-      const { data: prevExpenses } = await supabase
-        .from('cashflow')
-        .select('amount')
-        .eq('type', 'expense')
-        .gte('created_at', new Date(previousMonth.getFullYear(), previousMonth.getMonth(), 1).toISOString())
-        .lt('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
-
-      const prevGrossTotal = prevCommissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
-      const prevNetTotal = prevCommissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
-      const prevPaidTotal = prevCommissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
-      const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
-
+        
       // Calculate trends
       const calculateTrend = (current: number, previous: number): TrendData => ({
         current,
@@ -114,7 +129,8 @@ const DashboardStats = () => {
         paidCommission: calculateTrend(paidTotal, prevPaidTotal),
         expenses: calculateTrend(expensesTotal, prevExpensesTotal)
       };
-
+      
+      // --- 7. Update Metrics State ---
       setMetrics({
         grossCommission: grossTotal,
         netCommission: netTotal,
@@ -337,7 +353,7 @@ const DashboardStats = () => {
               <div>
                 <p className="text-green-600 dark:text-green-400 text-sm font-medium">Profit Margin</p>
                 <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                  {metrics.totalExpenses > 0 ? 
+                  {metrics.netCommission > 0 ? 
                     (((metrics.netCommission - metrics.totalExpenses) / metrics.netCommission) * 100).toFixed(1) + '%' 
                     : '0%'
                   }

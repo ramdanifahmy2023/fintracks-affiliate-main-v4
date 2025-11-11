@@ -48,9 +48,6 @@ interface Group {
   name: string;
 }
 
-// --- 2. HAPUS HELPER LOKAL ---
-
-
 // Skema validasi Zod (diperbarui untuk menggunakan string input)
 const debtFormSchema = z.object({
   type: z.enum(["debt", "receivable"]),

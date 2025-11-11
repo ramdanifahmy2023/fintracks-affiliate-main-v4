@@ -72,12 +72,11 @@ interface AddTransactionDialogProps {
   onSuccess: () => void;
 }
 
-// --- 2. HAPUS HELPER LOKAL ---
-
 export const AddTransactionDialog = ({ open, onOpenChange, onSuccess }: AddTransactionDialogProps) => {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]
+);
   const [categories, setCategories] = useState<string[]>([]);
   
   const form = useForm<TransactionFormValues>({

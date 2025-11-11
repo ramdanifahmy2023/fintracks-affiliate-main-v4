@@ -44,9 +44,6 @@ interface DeviceReportFormProps {
   // ---------------------------------
 }
 
-// --- 2. HAPUS HELPER LOKAL (parseCurrency & formatCurrencyInput) ---
-
-
 export const DeviceReportForm = ({
   report,
   reportDate,

@@ -38,27 +38,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+// --- 1. IMPORT HELPER BARU ---
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/utils";
+
 
 // Tipe data untuk dropdown Group
 interface Group {
   id: string;
   name: string;
 }
-
-// === HELPER UNTUK FORMAT/PARSE (Pola yang sama dengan Cashflow/Commission) ===
-const formatCurrencyInput = (value: string | number) => {
-   if (typeof value === 'number') value = value.toString();
-   if (!value) return "";
-   const num = value.replace(/[^0-9]/g, "");
-   if (num === "0") return "0";
-   return num ? new Intl.NumberFormat("id-ID").format(parseInt(num)) : "";
-};
-
-const parseCurrencyInput = (value: string) => {
-   return parseFloat(value.replace(/[^0-9]/g, "")) || 0;
-};
-// ============================================================================
-
 
 // Skema validasi Zod berdasarkan blueprint
 const debtFormSchema = z.object({
@@ -150,7 +138,7 @@ export const AddDebtDialog = ({ open, onOpenChange, onSuccess }: AddDebtDialogPr
           due_date: values.due_date ? format(values.due_date, "yyyy-MM-dd") : null,
           status: values.status,
           description: values.description,
-          group_id: values.group_id,
+          group_id: values.group_id === 'none' ? null : values.group_id,
         });
 
       if (error) throw error;
@@ -249,10 +237,8 @@ export const AddDebtDialog = ({ open, onOpenChange, onSuccess }: AddDebtDialogPr
                       <Input 
                         type="text" 
                         placeholder="1.000.000"
-                        // --- PERBAIKAN: Gunakan string mentah di onChange ---
                         value={formatCurrencyInput(field.value)}
                         onChange={e => field.onChange(e.target.value)}
-                        // -------------------------
                       />
                     </FormControl>
                     <FormMessage />
@@ -312,7 +298,7 @@ export const AddDebtDialog = ({ open, onOpenChange, onSuccess }: AddDebtDialogPr
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Terkait Grup (Opsional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? undefined}>
+                  <Select onValueChange={field.onChange} value={field.value ?? "none"}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih grup terkait..." />

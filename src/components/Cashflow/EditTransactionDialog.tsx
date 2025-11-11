@@ -73,8 +73,6 @@ interface EditTransactionDialogProps {
   transaction: TransactionData | null;
 }
 
-// --- 2. HAPUS HELPER LOKAL ---
-
 export const EditTransactionDialog = ({ open, onOpenChange, onSuccess, transaction }: EditTransactionDialogProps) => {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -119,7 +117,6 @@ export const EditTransactionDialog = ({ open, onOpenChange, onSuccess, transacti
     if (transactionType && !newCategories.includes(getValues("category"))) {
         setValue("category", "");
     }
-    // Hapus 'categories' dan 'form' dari dependency array
   }, [transactionType, getValues, setValue]);
   // === AKHIR PERBAIKAN ===
   

@@ -150,8 +150,8 @@ const Dashboard = () => {
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
 
   // State Data Real-time
-  const [loadingRanking, setLoadingRanking] = useState(true);
-  const [loadingCharts, setLoadingCharts] = useState(true);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+  const [loadingCharts, setLoadingCharts] = useState(false);
   const [rankingData, setRankingData] = useState<EmployeePerformance[]>([]);
 
   const [myKpi, setMyKpi] = useState<EmployeePerformance | null>(null);
@@ -162,6 +162,7 @@ const Dashboard = () => {
   const [salesTrendData, setSalesTrendData] = useState<SalesTrendData[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "Rp 0";
@@ -184,21 +185,28 @@ const Dashboard = () => {
     async (startDate: string, endDate: string, groupId: string) => {
       setLoadingRanking(true);
       setLoadingCharts(true);
+      setError(null);
 
-      if (parseISO(startDate) > parseISO(endDate)) {
-        toast.error("Rentang tanggal tidak valid.");
-        setLoadingRanking(false);
-        setLoadingCharts(false);
-        return;
-      }
+      try {
+        if (parseISO(startDate) > parseISO(endDate)) {
+          toast.error("Rentang tanggal tidak valid.");
+          setLoadingRanking(false);
+          setLoadingCharts(false);
+          return;
+        }
 
-      if (!isStaff) {
-        await Promise.all([
-          fetchRankingData(startDate, endDate, groupId),
-          fetchChartData(startDate, endDate, groupId),
-        ]);
-      } else {
-        await fetchRankingData(startDate, endDate, "all");
+        if (!isStaff) {
+          await Promise.all([
+            fetchRankingData(startDate, endDate, groupId),
+            fetchChartData(startDate, endDate, groupId),
+          ]);
+        } else {
+          await fetchRankingData(startDate, endDate, "all");
+        }
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError("Gagal memuat data dashboard");
+        toast.error("Gagal memuat data dashboard");
       }
     },
     [isStaff]
@@ -230,6 +238,7 @@ const Dashboard = () => {
             `
           )
           .gte("target_month", twoMonthsAgo)
+          .lte("target_month", endDate)
           .order("target_month", { ascending: false });
 
         if (isStaff) {
@@ -239,68 +248,69 @@ const Dashboard = () => {
         }
 
         const { data: kpiResults, error: kpiError } = await query;
-        if (kpiError) throw kpiError;
+        if (kpiError) {
+          console.error("KPI Query Error:", kpiError);
+          throw kpiError;
+        }
 
         const rawData = (kpiResults as any[]) || [];
-        const latestKpiMap = new Map<string, EmployeePerformance>();
+        
+        if (rawData.length === 0) {
+          console.warn("No KPI data found for the selected period");
+          setRankingData([]);
+          if (isStaff) setMyKpi(null);
+          setLoadingRanking(false);
+          return;
+        }
 
+        const latestKpiMap = new Map<string, EmployeePerformance>();
         const currentEmployeeId = employee?.id;
         let foundMyKpi: EmployeePerformance | null = null;
 
-        // === PERBAIKAN: Fetch dan aggregate daily_reports untuk omset real-time ===
+        // Fetch daily_reports untuk omset real-time
         let dailyReportsOmset = new Map<string, number>();
 
-        if (rawData.length > 0) {
-          let dailyQuery = supabase
-            .from("daily_reports")
-            .select("employee_id, total_sales, report_date")
-            .gte("report_date", startDate)
-            .lte("report_date", endDate);
+        const { data: dailyData, error: dailyError } = await supabase
+          .from("daily_reports")
+          .select("employee_id, total_sales, report_date")
+          .gte("report_date", startDate)
+          .lte("report_date", endDate);
 
-          if (!isStaff && groupId !== "all") {
-            dailyQuery = dailyQuery.eq("devices.group_id", groupId);
-          }
-
-          const { data: dailyData, error: dailyError } = await dailyQuery;
-
-          if (!dailyError && dailyData) {
-            (dailyData as any[]).forEach((report) => {
-              const empId = report.employee_id;
-              const current = dailyReportsOmset.get(empId) || 0;
-              dailyReportsOmset.set(empId, current + (report.total_sales || 0));
-            });
-          }
+        if (!dailyError && dailyData) {
+          (dailyData as any[]).forEach((report) => {
+            const empId = report.employee_id;
+            const current = dailyReportsOmset.get(empId) || 0;
+            dailyReportsOmset.set(empId, current + (report.total_sales || 0));
+          });
         }
-        // ===================================================================
 
         rawData.forEach((item) => {
-          const employeeId = item.employees.id;
+          const employeeId = item.employees?.id;
+          if (!employeeId) return;
 
-          // === GUNAKAN omset dari daily_reports jika ada, fallback ke actual_sales ===
           const omsetFromReports = dailyReportsOmset.get(employeeId) || 0;
-          const finalOmset = omsetFromReports > 0 ? omsetFromReports : item.actual_sales || 0;
-          // =========================================================================
+          const finalOmset = omsetFromReports > 0 ? omsetFromReports : (item.actual_sales || 0);
 
           const calculatedKpi = calculateTotalKpi(
             finalOmset,
-            item.sales_target,
+            item.sales_target || 0,
             item.actual_commission || 0,
-            item.commission_target,
+            item.commission_target || 0,
             item.actual_attendance || 0,
-            item.attendance_target
+            item.attendance_target || 0
           );
 
           const performanceRecord: EmployeePerformance = {
             id: employeeId,
             name: item.employees?.profiles?.full_name || "N/A",
-            group: item.employees?.groups?.name || "N/A",
+            group: item.employees?.groups?.name || "Tanpa Grup",
             omset: finalOmset,
             commission: item.actual_commission || 0,
             kpi: calculatedKpi,
             target_month: item.target_month,
             sales_target: item.sales_target || 0,
             commission_target: item.commission_target || 0,
-            attendance_target: item.attendance_target || 0,
+            attendance_target: item.attendance_target || 22,
             actual_attendance: item.actual_attendance || 0,
           };
 
@@ -318,13 +328,14 @@ const Dashboard = () => {
         setRankingData(uniqueData);
         if (isStaff) setMyKpi(foundMyKpi);
       } catch (error: any) {
+        console.error("Error fetching ranking data:", error);
         toast.error("Gagal memuat data Ranking Dashboard.");
-        console.error(error);
+        setRankingData([]);
       } finally {
         setLoadingRanking(false);
       }
     },
-    [employee, isStaff]
+    [employee?.id, isStaff]
   );
 
   // FETCH CHART DATA (Updated dengan daily_reports)
@@ -347,9 +358,9 @@ const Dashboard = () => {
         const { data: commsData, error: commsError } = await commsQuery;
         if (commsError) throw commsError;
 
-        const gross = commsData.reduce((acc, c) => acc + (c.gross_commission || 0), 0);
-        const net = commsData.reduce((acc, c) => acc + (c.net_commission || 0), 0);
-        const paid = commsData.reduce((acc, c) => acc + (c.paid_commission || 0), 0);
+        const gross = (commsData || []).reduce((acc, c) => acc + (c.gross_commission || 0), 0);
+        const net = (commsData || []).reduce((acc, c) => acc + (c.net_commission || 0), 0);
+        const paid = (commsData || []).reduce((acc, c) => acc + (c.paid_commission || 0), 0);
 
         setCommissionData([
           { name: "Kotor", value: gross, color: CHART_COLORS.blue },
@@ -360,7 +371,7 @@ const Dashboard = () => {
         // 2. Fetch Group Performance dari daily_reports (Real-time!)
         let dailyGroupQuery = supabase
           .from("daily_reports")
-          .select("total_sales, devices!inner(group_id, groups(name))")
+          .select("total_sales, device_id, devices!inner(group_id, groups(name))")
           .gte("report_date", startDate)
           .lte("report_date", endDate);
 
@@ -372,7 +383,7 @@ const Dashboard = () => {
         if (dailyGroupError) throw dailyGroupError;
 
         const groupOmsetMap = new Map<string, number>();
-        (dailyGroupData as any[]).forEach((item) => {
+        (dailyGroupData || []).forEach((item) => {
           const groupName = item.devices?.groups?.name || "Tanpa Grup";
           const currentOmset = groupOmsetMap.get(groupName) || 0;
           groupOmsetMap.set(groupName, currentOmset + (item.total_sales || 0));
@@ -383,13 +394,12 @@ const Dashboard = () => {
           .sort((a, b) => b.omset - a.omset)
           .slice(0, 5);
 
-        setGroupData(groupDataArray);
+        setGroupData(groupDataArray.length > 0 ? groupDataArray : [{ name: "Tidak ada data", omset: 0 }]);
 
         // 3. Fetch Account Platform Breakdown
         let accQuery = supabase
           .from("accounts")
-          .select("platform, group_id")
-          .in("platform", ["shopee", "tiktok"]);
+          .select("platform, group_id");
 
         if (groupId !== "all") {
           accQuery = accQuery.eq("group_id", groupId);
@@ -400,7 +410,7 @@ const Dashboard = () => {
 
         let shopeeCount = 0;
         let tiktokCount = 0;
-        (accData as any[]).forEach((acc) => {
+        (accData || []).forEach((acc) => {
           if (acc.platform === "shopee") shopeeCount++;
           if (acc.platform === "tiktok") tiktokCount++;
         });
@@ -411,32 +421,21 @@ const Dashboard = () => {
         ]);
 
         // 4. FETCH SALES TREND (Updated dengan daily_reports!)
-        let salesQuery = supabase
+        const { data: salesData, error: salesError } = await supabase
           .from("daily_reports")
           .select("report_date, total_sales, devices!inner(group_id)")
           .gte("report_date", startDate)
           .lte("report_date", endDate);
 
-        if (groupId !== "all") {
-          salesQuery = salesQuery.eq("devices.group_id", groupId);
-        }
-
-        const { data: salesData, error: salesError } = await salesQuery;
         if (salesError) throw salesError;
 
         // Fetch Commission Trend
-        let commTrendQuery = supabase
+        const { data: commissionTrendData, error: commissionTrendError } = await supabase
           .from("commissions")
           .select("payment_date, paid_commission, accounts!inner(group_id)")
           .gte("payment_date", startDate)
           .lte("payment_date", endDate);
 
-        if (groupId !== "all") {
-          commTrendQuery = commTrendQuery.eq("accounts.group_id", groupId);
-        }
-
-        const { data: commissionTrendData, error: commissionTrendError } =
-          await commTrendQuery;
         if (commissionTrendError) throw commissionTrendError;
 
         // Process & Gabungkan Data
@@ -455,28 +454,26 @@ const Dashboard = () => {
           trendMap.set(dateKey, { date: dateLabel, sales: 0, commission: 0 });
         });
 
-        (salesData as any[]).forEach((report) => {
+        (salesData || []).forEach((report) => {
           const dateKey = report.report_date;
           if (trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
             current.sales += report.total_sales || 0;
-            trendMap.set(dateKey, current);
           }
         });
 
-        (commissionTrendData as any[]).forEach((comm) => {
+        (commissionTrendData || []).forEach((comm) => {
           const dateKey = comm.payment_date;
           if (dateKey && trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
             current.commission += comm.paid_commission || 0;
-            trendMap.set(dateKey, current);
           }
         });
 
         setSalesTrendData(Array.from(trendMap.values()));
       } catch (error: any) {
+        console.error("Error fetching chart data:", error);
         toast.error("Gagal memuat data Charts Dashboard.");
-        console.error(error);
       } finally {
         setLoadingCharts(false);
       }
@@ -487,10 +484,14 @@ const Dashboard = () => {
   // Fetch Groups
   useEffect(() => {
     const fetchGroups = async () => {
-      const { data, error } = await supabase.from("groups").select("id, name");
-      if (data) {
-        setAvailableGroups(data);
-      } else if (error) {
+      try {
+        const { data, error } = await supabase.from("groups").select("id, name");
+        if (error) throw error;
+        if (data) {
+          setAvailableGroups(data);
+        }
+      } catch (error: any) {
+        console.error("Error fetching groups:", error);
         toast.error("Gagal memuat daftar grup.");
       }
     };
@@ -501,14 +502,16 @@ const Dashboard = () => {
 
   // Main useEffect
   useEffect(() => {
-    if (profile) {
+    if (profile && employee) {
       const initialGroupId = isStaff ? "all" : filterGroup;
       fetchData(filterDateStart, filterDateEnd, initialGroupId);
     }
-  }, [profile, employee, fetchData, filterDateStart, filterDateEnd, filterGroup, isStaff]);
+  }, [profile, employee, filterDateStart, filterDateEnd, filterGroup, isStaff, fetchData]);
 
   // Setup real-time subscription untuk daily_reports
   useEffect(() => {
+    if (!profile || !employee) return;
+
     const subscription = supabase
       .channel("daily_reports_channel")
       .on(
@@ -529,7 +532,7 @@ const Dashboard = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [filterDateStart, filterDateEnd, filterGroup, isStaff, fetchData]);
+  }, [filterDateStart, filterDateEnd, filterGroup, isStaff, fetchData, profile, employee]);
 
   const handleFilterSubmit = () => {
     const initialGroupId = isStaff ? "all" : filterGroup;
@@ -653,6 +656,10 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-64">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : filteredRankingData.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <p className="text-muted-foreground">Tidak ada data ranking staff ditemukan.</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -668,13 +675,6 @@ const Dashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRankingData.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center h-24">
-                            Tidak ada data ranking staff ditemukan.
-                          </TableCell>
-                        </TableRow>
-                      )}
                       {filteredRankingData.map((item, index) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-bold text-lg">
@@ -758,6 +758,14 @@ const Dashboard = () => {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Dashboard Utama</h1>
 
+        {error && (
+          <Card className="border-destructive">
+            <CardContent className="pt-6">
+              <p className="text-destructive">{error}</p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* FILTER GLOBAL */}
         <Card>
           <CardContent className="pt-6">
@@ -836,6 +844,10 @@ const Dashboard = () => {
               {loadingCharts ? (
                 <div className="flex justify-center items-center h-[300px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : salesTrendData.length === 0 ? (
+                <div className="flex justify-center items-center h-[300px]">
+                  <p className="text-muted-foreground">Tidak ada data tren penjualan.</p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -997,6 +1009,10 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-[300px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : accountData.length === 0 || (accountData[0]?.value === 0 && accountData[1]?.value === 0) ? (
+                <div className="flex justify-center items-center h-[300px]">
+                  <p className="text-muted-foreground">Tidak ada data akun.</p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
@@ -1043,13 +1059,14 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-64">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : filteredRankingData.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <p className="text-center text-muted-foreground">
+                    Tidak ada data ranking ditemukan.
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {filteredRankingData.length === 0 && (
-                    <p className="text-center text-muted-foreground">
-                      Tidak ada data ranking ditemukan.
-                    </p>
-                  )}
                   {filteredRankingData.slice(0, 5).map((employee, index) => (
                     <div
                       key={employee.id}

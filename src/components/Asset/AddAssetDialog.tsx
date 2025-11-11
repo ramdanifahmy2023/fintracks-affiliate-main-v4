@@ -95,8 +95,6 @@ export const AddAssetDialog = ({ open, onOpenChange, onSuccess }: AddAssetDialog
     },
   });
   
-  // --- 3. HAPUS HELPER LOKAL ---
-
   // Fetch data karyawan untuk dropdown "Assigned To"
   useEffect(() => {
     if (open) {

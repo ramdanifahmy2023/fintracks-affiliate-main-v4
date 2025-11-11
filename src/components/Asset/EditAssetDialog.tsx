@@ -96,8 +96,6 @@ export const EditAssetDialog = ({ open, onOpenChange, onSuccess, asset }: EditAs
     },
   });
   
-  // --- 3. HAPUS HELPER LOKAL ---
-  
   // Mengisi form saat data aset tersedia
   useEffect(() => {
     if (asset && open) {
@@ -110,7 +108,7 @@ export const EditAssetDialog = ({ open, onOpenChange, onSuccess, asset }: EditAs
         purchase_price: unitPrice.toString(), // number ke string
         quantity: 1, // Asumsi Qty 1 saat edit, karena DB tidak menyimpan Qty
         condition: asset.condition as AssetFormValues["condition"] || "Baru",
-        assigned_to: asset.assigned_to || "none",
+        assigned_to: (asset as any).assigned_to || "none", // Memperbaiki assigned_to
         notes: asset.notes || "",
       });
     }
