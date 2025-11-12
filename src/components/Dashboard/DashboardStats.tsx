@@ -20,7 +20,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { format, parseISO } from "date-fns"; // Import parseISO
 
 interface DashboardMetrics {
-  grossCommission: number;
+  grossCommission: number; // Ini akan kita isi dengan TOTAL OMSET
   netCommission: number;
   paidCommission: number;
   totalExpenses: number;
@@ -73,11 +73,12 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
 
 
       // --- 1. Fetch commission data (Periode Ini) ---
+      // PERBAIKAN: Hapus gross_commission, ganti filter ke period_start
       let commsQuery = supabase
         .from('commissions')
-        .select('gross_commission, net_commission, paid_commission, accounts!inner(group_id)')
-        .gte('payment_date', startOfThisPeriod) // Filter berdasarkan tanggal pembayaran
-        .lte('payment_date', endOfThisPeriod);
+        .select('net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('period_start', startOfThisPeriod) // GANTI DARI payment_date
+        .lte('period_start', endOfThisPeriod);  // GANTI DARI payment_date
 
       // FIX: Apply Group Filter
       if (groupId !== 'all') {
@@ -98,19 +99,34 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
         expensesQuery = expensesQuery.eq('group_id', groupId);
       }
       const { data: expenses } = await expensesQuery;
+      
+      // --- 1b. [KODE BARU] Fetch Omset (Periode Ini) from daily_reports ---
+      let omsetQuery = supabase
+        .from('daily_reports')
+        .select('total_sales, devices!inner(group_id)') // Join devices untuk filter group
+        .gte('report_date', startOfThisPeriod)
+        .lte('report_date', endOfThisPeriod);
+
+      if (groupId !== 'all') {
+        omsetQuery = omsetQuery.eq('devices.group_id', groupId);
+      }
+      const { data: omsetData } = await omsetQuery;
+      // -------------------------------------------------------------
 
       // --- 3. Hitung Totals Periode Ini ---
-      const grossTotal = commissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
+      // PERBAIKAN: grossTotal sekarang dari omsetData
+      const grossTotal = omsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
       const netTotal = commissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const paidTotal = commissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const expensesTotal = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
 
       // --- 4. Fetch commission data (Periode Sebelumnya) ---
+      // PERBAIKAN: Hapus gross_commission, ganti filter ke period_start
       let prevCommsQuery = supabase
         .from('commissions')
-        .select('gross_commission, net_commission, paid_commission, accounts!inner(group_id)')
-        .gte('payment_date', startOfPrevPeriod) 
-        .lte('payment_date', endOfPrevPeriod);
+        .select('net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('period_start', startOfPrevPeriod) 
+        .lte('period_start', endOfPrevPeriod);
         
       // FIX: Apply Group Filter for previous period
       if (groupId !== 'all') {
@@ -132,8 +148,22 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
       }
       const { data: prevExpenses } = await prevExpensesQuery;
 
+      // --- 4b. [KODE BARU] Fetch Omset (Periode Sebelumnya) from daily_reports ---
+      let prevOmsetQuery = supabase
+        .from('daily_reports')
+        .select('total_sales, devices!inner(group_id)') // Join devices
+        .gte('report_date', startOfPrevPeriod)
+        .lte('report_date', endOfPrevPeriod);
+
+      if (groupId !== 'all') {
+        prevOmsetQuery = prevOmsetQuery.eq('devices.group_id', groupId);
+      }
+      const { data: prevOmsetData } = await prevOmsetQuery;
+      // -----------------------------------------------------------------
+
       // --- 6. Hitung Totals Periode Sebelumnya ---
-      const prevGrossTotal = prevCommissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
+      // PERBAIKAN: prevGrossTotal sekarang dari prevOmsetData
+      const prevGrossTotal = prevOmsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
       const prevNetTotal = prevCommissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const prevPaidTotal = prevCommissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
@@ -160,7 +190,7 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
       });
 
       const newTrends = {
-        grossCommission: calculateTrend(grossTotal, prevGrossTotal),
+        grossCommission: calculateTrend(grossTotal, prevGrossTotal), // Ini sekarang Omset Trend
         netCommission: calculateTrend(netTotal, prevNetTotal),
         paidCommission: calculateTrend(paidTotal, prevPaidTotal),
         expenses: calculateTrend(expensesTotal, prevExpensesTotal)
@@ -168,7 +198,7 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
       
       // --- 7. Update Metrics State ---
       setMetrics({
-        grossCommission: grossTotal,
+        grossCommission: grossTotal, // Ini sekarang berisi TOTAL OMSET
         netCommission: netTotal,
         paidCommission: paidTotal,
         totalExpenses: expensesTotal,
@@ -319,13 +349,16 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
 
       {/* Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        
+        {/* --- PERBAIKAN JUDUL KARTU --- */}
         <MetricCard
-          title="Komisi Kotor"
+          title="Total Omset"
           value={formatCurrency(metrics.grossCommission)}
           trend={trends.grossCommission}
           icon={DollarSign}
-          subtitle="Total komisi sebelum potongan"
+          subtitle="Total penjualan dari Laporan Harian"
         />
+        {/* ----------------------------- */}
         
         <MetricCard
           title="Komisi Bersih"
