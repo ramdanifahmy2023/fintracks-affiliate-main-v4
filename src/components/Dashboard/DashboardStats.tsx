@@ -1,6 +1,6 @@
 // src/components/Dashboard/DashboardStats.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { format, parseISO } from "date-fns"; // Import parseISO
 
 interface DashboardMetrics {
   grossCommission: number;
@@ -36,81 +37,116 @@ interface TrendData {
   percentage: number;
 }
 
-const DashboardStats = () => {
+// --- BARU: Props untuk Menerima Filter dari Dashboard.tsx ---
+interface DashboardStatsProps {
+  filterDateStart: string;
+  filterDateEnd: string;
+  filterGroup: string;
+}
+// -------------------------------------------------------------
+
+// --- UPDATE KOMPONEN UNTUK MENGGUNAKAN PROPS ---
+const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: DashboardStatsProps) => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [trends, setTrends] = useState<Record<string, TrendData>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Dapatkan awal dan akhir bulan ini
-      const now = new Date();
-      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      // Akhir bulan ini (untuk menghindari data yang baru terinput di awal bulan depan)
-      const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString(); 
+      // Gunakan props
+      const startOfThisPeriod = filterDateStart;
+      const endOfThisPeriod = filterDateEnd;
       
-      // Dapatkan awal dan akhir bulan sebelumnya
-      const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const startOfPrevMonth = previousMonth.toISOString();
-      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
+      // Hitung rentang waktu sebelumnya dengan panjang yang sama
+      const currentPeriodStart = parseISO(startOfThisPeriod);
+      // Hitung selisih hari
+      const timeSpanMs = parseISO(endOfThisPeriod).getTime() - currentPeriodStart.getTime();
+      
+      // Periode sebelumnya berakhir 1 hari sebelum periode ini dimulai
+      const endOfPrevPeriod = format(new Date(currentPeriodStart.getTime() - 1), 'yyyy-MM-dd');
+      // Periode sebelumnya dimulai (endOfPrevPeriod - timeSpan)
+      const startOfPrevPeriod = format(new Date(parseISO(endOfPrevPeriod).getTime() - timeSpanMs), 'yyyy-MM-dd');
+      
+      const groupId = filterGroup;
 
 
-      // --- 1. Fetch commission data (Bulan Ini) ---
-      const { data: commissions } = await supabase
+      // --- 1. Fetch commission data (Periode Ini) ---
+      let commsQuery = supabase
         .from('commissions')
-        // Ganti created_at dengan payment_date untuk data komisi
-        .select('gross_commission, net_commission, paid_commission, payment_date')
-        .gte('payment_date', startOfThisMonth) // Filter berdasarkan tanggal pembayaran
-        .lte('payment_date', endOfThisMonth);
+        .select('gross_commission, net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('payment_date', startOfThisPeriod) // Filter berdasarkan tanggal pembayaran
+        .lte('payment_date', endOfThisPeriod);
 
-      // --- 2. Fetch expenses (Bulan Ini) ---
-      const { data: expenses } = await supabase
+      // FIX: Apply Group Filter
+      if (groupId !== 'all') {
+        commsQuery = commsQuery.eq('accounts.group_id', groupId);
+      }
+      const { data: commissions } = await commsQuery;
+
+      // --- 2. Fetch expenses (Periode Ini) ---
+      let expensesQuery = supabase
         .from('cashflow')
         .select('amount')
         .eq('type', 'expense')
-        .gte('transaction_date', startOfThisMonth) // Filter berdasarkan tanggal transaksi
-        .lte('transaction_date', endOfThisMonth);
+        .gte('transaction_date', startOfThisPeriod) // Filter berdasarkan tanggal transaksi
+        .lte('transaction_date', endOfThisPeriod);
+          
+      // FIX: Apply Group Filter
+      if (groupId !== 'all') {
+        expensesQuery = expensesQuery.eq('group_id', groupId);
+      }
+      const { data: expenses } = await expensesQuery;
 
-      // --- 3. Hitung Totals Bulan Ini ---
+      // --- 3. Hitung Totals Periode Ini ---
       const grossTotal = commissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
       const netTotal = commissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const paidTotal = commissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const expensesTotal = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
 
-      // --- 4. Fetch commission data (Bulan Sebelumnya) ---
-      const { data: prevCommissions } = await supabase
+      // --- 4. Fetch commission data (Periode Sebelumnya) ---
+      let prevCommsQuery = supabase
         .from('commissions')
-        .select('gross_commission, net_commission, paid_commission')
-        .gte('payment_date', startOfPrevMonth) 
-        .lte('payment_date', endOfPrevMonth);
+        .select('gross_commission, net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('payment_date', startOfPrevPeriod) 
+        .lte('payment_date', endOfPrevPeriod);
+        
+      // FIX: Apply Group Filter for previous period
+      if (groupId !== 'all') {
+         prevCommsQuery = prevCommsQuery.eq('accounts.group_id', groupId);
+      }
+      const { data: prevCommissions } = await prevCommsQuery;
 
-      // --- 5. Fetch expenses (Bulan Sebelumnya) ---
-      const { data: prevExpenses } = await supabase
+      // --- 5. Fetch expenses (Periode Sebelumnya) ---
+      let prevExpensesQuery = supabase
         .from('cashflow')
         .select('amount')
         .eq('type', 'expense')
-        .gte('transaction_date', startOfPrevMonth)
-        .lte('transaction_date', endOfPrevMonth);
+        .gte('transaction_date', startOfPrevPeriod)
+        .lte('transaction_date', endOfPrevPeriod);
+          
+      // FIX: Apply Group Filter for previous period
+      if (groupId !== 'all') {
+        prevExpensesQuery = prevExpensesQuery.eq('group_id', groupId);
+      }
+      const { data: prevExpenses } = await prevExpensesQuery;
 
-      // --- 6. Hitung Totals Bulan Sebelumnya ---
+      // --- 6. Hitung Totals Periode Sebelumnya ---
       const prevGrossTotal = prevCommissions?.reduce((sum, c) => sum + (c.gross_commission || 0), 0) || 0;
       const prevNetTotal = prevCommissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const prevPaidTotal = prevCommissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
 
-      // Fetch counts (tidak perlu filter tanggal)
+      // Fetch counts (tidak perlu filter tanggal atau group)
       const { count: employeesCount } = await supabase
         .from('employees')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch groups count
       const { count: groupsCount } = await supabase
         .from('groups')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch active accounts
       const { count: activeAccountsCount } = await supabase
         .from('accounts')
         .select('*', { count: 'exact', head: true })
@@ -120,7 +156,7 @@ const DashboardStats = () => {
       const calculateTrend = (current: number, previous: number): TrendData => ({
         current,
         previous,
-        percentage: previous > 0 ? ((current - previous) / previous) * 100 : 0
+        percentage: previous !== 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0
       });
 
       const newTrends = {
@@ -150,16 +186,18 @@ const DashboardStats = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterDateStart, filterDateEnd, filterGroup]); // Dependensi pada props filter
 
+
+  // --- BARU: useEffect untuk memicu fetch saat filter props berubah ---
   useEffect(() => {
     fetchDashboardData();
     
-    // Auto refresh every 5 minutes
+    // Interval refresh tetap 5 menit
     const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDashboardData]);
 
   const TrendIndicator = ({ trend, type = 'positive' }: { trend: TrendData; type?: 'positive' | 'negative' }) => {
     const isPositive = trend.percentage > 0;
@@ -179,6 +217,7 @@ const DashboardStats = () => {
     );
   };
 
+  // MetricCard lokal di DashboardStats
   const MetricCard = ({ 
     title, 
     value, 
@@ -214,7 +253,7 @@ const DashboardStats = () => {
           <div className="flex items-center justify-between mt-2">
             <TrendIndicator trend={trend} type={type} />
             <span className="text-xs text-gray-500">
-              vs bulan lalu
+              vs periode sebelumnya
             </span>
           </div>
         )}
@@ -222,7 +261,7 @@ const DashboardStats = () => {
           <div className="mt-3">
             <Progress value={progress} className="h-2" />
             <p className="text-xs text-gray-500 mt-1">
-              Target bulanan: {progress.toFixed(1)}%
+              Realisasi: {progress.toFixed(1)}%
             </p>
           </div>
         )}
@@ -311,7 +350,7 @@ const DashboardStats = () => {
           trend={trends.expenses}
           icon={TrendingDown}
           type="negative"
-          subtitle="Pengeluaran bulan ini"
+          subtitle="Pengeluaran periode ini"
         />
         
         <MetricCard

@@ -44,7 +44,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
-import { format, subDays, eachDayOfInterval, parseISO } from "date-fns";
+import { format, subDays, eachDayOfInterval, parseISO, subMonths, startOfMonth } from "date-fns";
 import { id as indonesiaLocale } from "date-fns/locale";
 import { Label } from "@/components/ui/label";
 import {
@@ -179,6 +179,13 @@ const Dashboard = () => {
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(value);
+    
+    
+  const handleFilterSubmit = () => {
+    const initialGroupId = isStaff ? "all" : filterGroup;
+    fetchData(filterDateStart, filterDateEnd, initialGroupId);
+  };
+
 
   // FETCH DATA UTAMA
   const fetchData = useCallback(
@@ -201,6 +208,7 @@ const Dashboard = () => {
             fetchChartData(startDate, endDate, groupId),
           ]);
         } else {
+          // Staff hanya perlu fetch ranking (untuk dirinya dan semua staff)
           await fetchRankingData(startDate, endDate, "all");
         }
       } catch (err: any) {
@@ -217,7 +225,11 @@ const Dashboard = () => {
     async (startDate: string, endDate: string, groupId: string) => {
       setLoadingRanking(true);
       try {
-        const twoMonthsAgo = format(subDays(parseISO(startDate), 30), "yyyy-MM-dd");
+        // FIX #2-REFINED: Tentukan Awal Bulan Pelaporan dan Awal Bulan Sebelumnya
+        // Logika ini mencari target dari awal bulan lalu HINGGA awal bulan ini untuk memastikan data target terbaru terambil.
+        const endMonth = parseISO(endDate);
+        const currentMonthStart = format(startOfMonth(endMonth), "yyyy-MM-dd"); 
+        const previousMonthStart = format(subMonths(startOfMonth(endMonth), 1), "yyyy-MM-dd");
 
         let query = supabase
           .from("kpi_targets")
@@ -237,8 +249,8 @@ const Dashboard = () => {
                 target_month
             `
           )
-          .gte("target_month", twoMonthsAgo)
-          .lte("target_month", endDate)
+          .gte("target_month", previousMonthStart) 
+          .lte("target_month", currentMonthStart) 
           .order("target_month", { ascending: false });
 
         if (isStaff) {
@@ -315,6 +327,7 @@ const Dashboard = () => {
           };
 
           if (!latestKpiMap.has(employeeId)) {
+            // Karena diurutkan descending, item pertama adalah yang paling baru
             latestKpiMap.set(employeeId, performanceRecord);
           }
 
@@ -500,15 +513,15 @@ const Dashboard = () => {
     }
   }, [isStaff]);
 
-  // Main useEffect
+  // FIX #1: Main useEffect hanya berjalan pada mount/user change
   useEffect(() => {
     if (profile && employee) {
-      const initialGroupId = isStaff ? "all" : filterGroup;
-      fetchData(filterDateStart, filterDateEnd, initialGroupId);
+      // Panggil fungsi submit filter saat mount/login untuk memuat data awal
+      handleFilterSubmit(); 
     }
-  }, [profile, employee, filterDateStart, filterDateEnd, filterGroup, isStaff, fetchData]);
+  }, [profile, employee, isStaff]); 
 
-  // Setup real-time subscription untuk daily_reports
+  // FIX #3: Setup real-time subscription untuk daily_reports
   useEffect(() => {
     if (!profile || !employee) return;
 
@@ -523,8 +536,8 @@ const Dashboard = () => {
         },
         (payload) => {
           console.log("Daily reports updated, refreshing dashboard...", payload);
-          const initialGroupId = isStaff ? "all" : filterGroup;
-          fetchData(filterDateStart, filterDateEnd, initialGroupId);
+          // Panggil handleFilterSubmit agar menggunakan state filter terbaru
+          handleFilterSubmit(); 
         }
       )
       .subscribe();
@@ -532,12 +545,8 @@ const Dashboard = () => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [filterDateStart, filterDateEnd, filterGroup, isStaff, fetchData, profile, employee]);
-
-  const handleFilterSubmit = () => {
-    const initialGroupId = isStaff ? "all" : filterGroup;
-    fetchData(filterDateStart, filterDateEnd, initialGroupId);
-  };
+    // Hapus filter states dari dependencies untuk mencegah re-subscribe berulang-ulang
+  }, [fetchData, profile, employee, isStaff]); 
 
   const filteredRankingData = rankingData.filter(
     (e) =>
@@ -828,7 +837,11 @@ const Dashboard = () => {
         </Card>
 
         {/* KOMPONEN METRIK REAL TIME (FINANSIAL) */}
-        <DashboardStats />
+        <DashboardStats 
+          filterDateStart={filterDateStart}
+          filterDateEnd={filterDateEnd}
+          filterGroup={filterGroup}
+        />
 
         {/* Charts Row 1 */}
         <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
