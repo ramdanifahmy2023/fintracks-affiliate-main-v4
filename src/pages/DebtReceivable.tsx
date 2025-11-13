@@ -40,7 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, subDays } from "date-fns";
 import { id as indonesiaLocale } from "date-fns/locale";
 import { AddDebtReceivableDialog } from "@/components/DebtReceivable/AddDebtReceivableDialog"; 
 import { EditDebtDialog } from "@/components/Debt/EditDebtDialog"; 
@@ -85,7 +85,8 @@ const DebtReceivable = () => {
   const [filterGroup, setFilterGroup] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
-  const [filterDateStart, setFilterDateStart] = useState(format(new Date(), "yyyy-MM-dd"));
+  // Default: 90 hari terakhir untuk menampilkan semua data yang relevan
+  const [filterDateStart, setFilterDateStart] = useState(format(subDays(new Date(), 90), "yyyy-MM-dd"));
   const [filterDateEnd, setFilterDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   // -------------------------
   
