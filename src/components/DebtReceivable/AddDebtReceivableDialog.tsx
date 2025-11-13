@@ -141,26 +141,36 @@ export const AddDebtReceivableDialog = ({
       
       const finalGroupId = values.group_id === "none" ? null : values.group_id;
 
+      // Perbaikan: format transaction_date dengan benar
+      const createdAtDate = format(values.transaction_date, "yyyy-MM-dd HH:mm:ss");
+
+      const insertData = {
+        type: values.type,
+        counterparty: values.counterparty,
+        amount: finalAmount,
+        due_date: values.due_date ? format(values.due_date, "yyyy-MM-dd") : null,
+        status: values.status,
+        description: values.description || null,
+        group_id: finalGroupId,
+      };
+
+      console.log("Inserting data:", insertData);
+
       const { error } = await supabase
         .from("debt_receivable")
-        .insert({
-          type: values.type,
-          created_at: format(values.transaction_date, "yyyy-MM-dd"), // Gunakan created_at untuk tanggal
-          counterparty: values.counterparty,
-          amount: finalAmount, // Kirim sebagai number
-          due_date: values.due_date ? format(values.due_date, "yyyy-MM-dd") : null,
-          status: values.status,
-          description: values.description,
-          group_id: finalGroupId,
-        });
+        .insert(insertData);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
 
       toast.success(`Data ${values.type === 'debt' ? 'Hutang' : 'Piutang'} berhasil dicatat.`);
       onSuccess(); // Refresh list & tutup dialog
-    } catch (error: any) {
-      console.error(error);
-      toast.error(`Terjadi kesalahan: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Gagal menyimpan data';
+      console.error("Submit error:", error);
+      toast.error(`Terjadi kesalahan: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -276,11 +286,12 @@ export const AddDebtReceivableDialog = ({
                     <FormControl>
                       <Input 
                         type="text" 
-                        placeholder="1.000.000"
+                        placeholder="1000000"
                         value={formatCurrencyInput(field.value)}
-                        // --- PERBAIKAN: Gunakan string mentah di onChange ---
-                        onChange={e => field.onChange(e.target.value)}
-                        // -------------------------
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9]/g, "");
+                          field.onChange(rawValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

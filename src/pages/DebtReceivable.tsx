@@ -162,8 +162,8 @@ const DebtReceivable = () => {
       const { data, error } = await query;
 
       if (error) throw error;
-      setData(data as any);
-    } catch (error: any) {
+      setData((data || []) as DebtData[]);
+    } catch (error) {
       toast.error("Gagal memuat data hutang piutang.");
       console.error(error);
     } finally {

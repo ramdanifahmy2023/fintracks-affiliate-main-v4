@@ -99,7 +99,7 @@ export const EditDebtDialog = ({ open, onOpenChange, onSuccess, debt }: EditDebt
         counterparty: debt.counterparty,
         amount: debt.amount.toString(), // Ubah number ke string
         due_date: debt.due_date ? new Date(debt.due_date + "T00:00:00") : null,
-        status: debt.status as any,
+        status: debt.status as "Belum Lunas" | "Cicilan" | "Lunas",
         description: debt.description,
         group_id: groupId,
       });
@@ -117,27 +117,34 @@ export const EditDebtDialog = ({ open, onOpenChange, onSuccess, debt }: EditDebt
         throw new Error("Nominal tidak valid atau kosong.");
       }
 
+      const updateData = {
+        type: values.type,
+        counterparty: values.counterparty,
+        amount: finalAmount,
+        due_date: values.due_date ? format(values.due_date, "yyyy-MM-dd") : null,
+        status: values.status,
+        description: values.description || null,
+        group_id: finalGroupId,
+      };
+
+      console.log("Updating data:", updateData);
+
       const { error } = await supabase
         .from("debt_receivable")
-        .update({
-          type: values.type,
-          created_at: format(values.transaction_date, "yyyy-MM-dd"),
-          counterparty: values.counterparty,
-          amount: finalAmount,
-          due_date: values.due_date ? format(values.due_date, "yyyy-MM-dd") : null,
-          status: values.status,
-          description: values.description,
-          group_id: finalGroupId,
-        })
+        .update(updateData)
         .eq("id", debt.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
 
       toast.success(`Data ${values.type === 'debt' ? 'Hutang' : 'Piutang'} berhasil diperbarui.`);
       onSuccess();
-    } catch (error: any) {
-      console.error(error);
-      toast.error(`Terjadi kesalahan: ${error.message}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Gagal memperbarui data';
+      console.error("Submit error:", error);
+      toast.error(`Terjadi kesalahan: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -249,11 +256,14 @@ export const EditDebtDialog = ({ open, onOpenChange, onSuccess, debt }: EditDebt
                   <FormItem>
                     <FormLabel>Nominal (IDR)</FormLabel>
                     <FormControl>
-                      <Input type="text" placeholder="1000000"
-                       value={formatCurrencyInput(field.value)}
-                       // --- PERBAIKAN: Gunakan string mentah di onChange ---
-                       onChange={e => field.onChange(e.target.value)}
-                       // ----------------------------------------------------
+                      <Input 
+                        type="text" 
+                        placeholder="1000000"
+                        value={formatCurrencyInput(field.value)}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9]/g, "");
+                          field.onChange(rawValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
