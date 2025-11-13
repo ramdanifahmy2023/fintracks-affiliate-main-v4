@@ -357,29 +357,43 @@ const Dashboard = () => {
       setLoadingCharts(true);
 
       try {
-        // 1. Fetch Commission Breakdown
+        console.log("Fetching chart data:", { startDate, endDate, groupId });
+
+        // 1. Fetch Commission Breakdown (PERBAIKAN: gunakan period_start bukan payment_date)
         let commsQuery = supabase
           .from("commissions")
-          .select("gross_commission, net_commission, paid_commission, accounts!inner(group_id)")
-          .gte("payment_date", startDate)
-          .lte("payment_date", endDate);
+          .select("gross_commission, net_commission, paid_commission, accounts!inner(id, group_id)")
+          .gte("period_start", startDate)
+          .lte("period_start", endDate);
 
         if (groupId !== "all") {
           commsQuery = commsQuery.eq("accounts.group_id", groupId);
         }
 
         const { data: commsData, error: commsError } = await commsQuery;
-        if (commsError) throw commsError;
+        
+        if (commsError) {
+          console.error("Error fetching commissions:", commsError);
+          throw commsError;
+        }
 
-        const gross = (commsData || []).reduce((acc, c) => acc + (c.gross_commission || 0), 0);
-        const net = (commsData || []).reduce((acc, c) => acc + (c.net_commission || 0), 0);
-        const paid = (commsData || []).reduce((acc, c) => acc + (c.paid_commission || 0), 0);
+        console.log("Commissions data:", commsData);
 
-        setCommissionData([
+        const gross = (commsData || []).reduce((acc, c) => acc + (Number(c.gross_commission) || 0), 0);
+        const net = (commsData || []).reduce((acc, c) => acc + (Number(c.net_commission) || 0), 0);
+        const paid = (commsData || []).reduce((acc, c) => acc + (Number(c.paid_commission) || 0), 0);
+
+        console.log("Commission totals:", { gross, net, paid });
+
+        // Pastikan data selalu di-set, meskipun nilainya 0
+        const commissionBreakdown = [
           { name: "Kotor", value: gross, color: CHART_COLORS.blue },
           { name: "Bersih", value: net, color: CHART_COLORS.green },
           { name: "Cair", value: paid, color: CHART_COLORS.yellow },
-        ]);
+        ];
+
+        console.log("Setting commission data:", commissionBreakdown);
+        setCommissionData(commissionBreakdown);
 
         // 2. Fetch Group Performance dari daily_reports (Real-time!)
         let dailyGroupQuery = supabase
@@ -393,13 +407,16 @@ const Dashboard = () => {
         }
 
         const { data: dailyGroupData, error: dailyGroupError } = await dailyGroupQuery;
-        if (dailyGroupError) throw dailyGroupError;
+        if (dailyGroupError) {
+          console.error("Error fetching daily group data:", dailyGroupError);
+          throw dailyGroupError;
+        }
 
         const groupOmsetMap = new Map<string, number>();
         (dailyGroupData || []).forEach((item) => {
           const groupName = item.devices?.groups?.name || "Tanpa Grup";
           const currentOmset = groupOmsetMap.get(groupName) || 0;
-          groupOmsetMap.set(groupName, currentOmset + (item.total_sales || 0));
+          groupOmsetMap.set(groupName, currentOmset + (Number(item.total_sales) || 0));
         });
 
         const groupDataArray = Array.from(groupOmsetMap.entries())
@@ -419,7 +436,10 @@ const Dashboard = () => {
         }
 
         const { data: accData, error: accError } = await accQuery;
-        if (accError) throw accError;
+        if (accError) {
+          console.error("Error fetching accounts:", accError);
+          throw accError;
+        }
 
         let shopeeCount = 0;
         let tiktokCount = 0;
@@ -434,22 +454,44 @@ const Dashboard = () => {
         ]);
 
         // 4. FETCH SALES TREND (Updated dengan daily_reports!)
-        const { data: salesData, error: salesError } = await supabase
+        let salesQuery = supabase
           .from("daily_reports")
           .select("report_date, total_sales, devices!inner(group_id)")
           .gte("report_date", startDate)
           .lte("report_date", endDate);
 
-        if (salesError) throw salesError;
+        if (groupId !== "all") {
+          salesQuery = salesQuery.eq("devices.group_id", groupId);
+        }
 
-        // Fetch Commission Trend
-        const { data: commissionTrendData, error: commissionTrendError } = await supabase
+        const { data: salesData, error: salesError } = await salesQuery;
+
+        if (salesError) {
+          console.error("Error fetching sales trend:", salesError);
+          throw salesError;
+        }
+
+        console.log("Sales data:", salesData);
+
+        // Fetch Commission Trend (PERBAIKAN: gunakan period_start untuk grouping)
+        let commissionTrendQuery = supabase
           .from("commissions")
-          .select("payment_date, paid_commission, accounts!inner(group_id)")
-          .gte("payment_date", startDate)
-          .lte("payment_date", endDate);
+          .select("period_start, paid_commission, accounts!inner(id, group_id)")
+          .gte("period_start", startDate)
+          .lte("period_start", endDate);
 
-        if (commissionTrendError) throw commissionTrendError;
+        if (groupId !== "all") {
+          commissionTrendQuery = commissionTrendQuery.eq("accounts.group_id", groupId);
+        }
+
+        const { data: commissionTrendData, error: commissionTrendError } = await commissionTrendQuery;
+
+        if (commissionTrendError) {
+          console.error("Error fetching commission trend:", commissionTrendError);
+          throw commissionTrendError;
+        }
+
+        console.log("Commission trend data:", commissionTrendData);
 
         // Process & Gabungkan Data
         const trendMap = new Map<
@@ -467,26 +509,30 @@ const Dashboard = () => {
           trendMap.set(dateKey, { date: dateLabel, sales: 0, commission: 0 });
         });
 
+        // Process sales data
         (salesData || []).forEach((report) => {
           const dateKey = report.report_date;
           if (trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
-            current.sales += report.total_sales || 0;
+            current.sales += Number(report.total_sales) || 0;
           }
         });
 
+        // Process commission data - tampilkan pada tanggal period_start
         (commissionTrendData || []).forEach((comm) => {
-          const dateKey = comm.payment_date;
+          const dateKey = comm.period_start;
           if (dateKey && trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
-            current.commission += comm.paid_commission || 0;
+            current.commission += Number(comm.paid_commission) || 0;
           }
         });
 
-        setSalesTrendData(Array.from(trendMap.values()));
+        const finalTrendData = Array.from(trendMap.values());
+        console.log("Final trend data:", finalTrendData);
+        setSalesTrendData(finalTrendData);
       } catch (error: any) {
         console.error("Error fetching chart data:", error);
-        toast.error("Gagal memuat data Charts Dashboard.");
+        toast.error("Gagal memuat data Charts Dashboard: " + (error.message || "Unknown error"));
       } finally {
         setLoadingCharts(false);
       }
@@ -869,9 +915,11 @@ const Dashboard = () => {
                     <XAxis
                       dataKey="date"
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                       tickFormatter={(val) => formatCurrencyForChart(val)}
                     />
                     <Tooltip
@@ -879,10 +927,13 @@ const Dashboard = () => {
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "var(--radius)",
+                        color: "hsl(var(--foreground))",
                       }}
                       formatter={(value: number) => formatCurrencyForChart(value)}
                     />
-                    <Legend />
+                    <Legend 
+                      wrapperStyle={{ color: "hsl(var(--foreground))" }}
+                    />
                     <Line
                       type="monotone"
                       dataKey="sales"
@@ -915,6 +966,10 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-[300px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : commissionData.length === 0 || commissionData.every(item => item.value === 0) ? (
+                <div className="flex justify-center items-center h-[300px]">
+                  <p className="text-muted-foreground">Tidak ada data komisi untuk periode ini.</p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={commissionData} layout="vertical">
@@ -925,18 +980,21 @@ const Dashboard = () => {
                     <XAxis
                       type="number"
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                       tickFormatter={(val) => formatCurrencyForChart(val)}
                     />
                     <YAxis
                       type="category"
                       dataKey="name"
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                     />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "var(--radius)",
+                        color: "hsl(var(--foreground))",
                       }}
                       formatter={(value: number) => formatCurrencyForChart(value)}
                     />
@@ -982,18 +1040,21 @@ const Dashboard = () => {
                     <XAxis
                       type="number"
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                       tickFormatter={(val) => formatCurrencyForChart(val)}
                     />
                     <YAxis
                       type="category"
                       dataKey="name"
                       stroke="hsl(var(--muted-foreground))"
+                      tick={{ fill: "hsl(var(--muted-foreground))" }}
                     />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "var(--radius)",
+                        color: "hsl(var(--foreground))",
                       }}
                       formatter={(value: number) => formatCurrencyForChart(value)}
                     />
@@ -1038,15 +1099,25 @@ const Dashboard = () => {
                         `${name} (${(percent * 100).toFixed(0)}%)`
                       }
                       outerRadius={100}
-                      fill="#8884d8"
+                      fill={CHART_COLORS.blue}
                       dataKey="value"
                     >
                       {accountData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => `${value} Akun`} />
-                    <Legend />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "var(--radius)",
+                        color: "hsl(var(--foreground))",
+                      }}
+                      formatter={(value) => `${value} Akun`} 
+                    />
+                    <Legend 
+                      wrapperStyle={{ color: "hsl(var(--foreground))" }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               )}

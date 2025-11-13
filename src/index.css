@@ -35,6 +35,13 @@
     
     --radius: 0.5rem;
     
+    /* Chart Colors Light Mode */
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 142.1 76.2% 36.3%;
+    --chart-3: 32.1 94.6% 43.7%;
+    --chart-4: 271.5 81.3% 56.1%;
+    --chart-5: 215 20.2% 65.1%;
+    
     /* Sidebar Colors Light */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -76,6 +83,13 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
     
+    /* Chart Colors Dark Mode */
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 142.1 70.6% 45.3%;
+    --chart-3: 32.1 94.6% 43.7%;
+    --chart-4: 271.5 81.3% 56.1%;
+    --chart-5: 215 20.2% 65.1%;
+    
     /* Sidebar Colors Dark */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -102,4 +116,23 @@
 /* Smooth transitions for theme changes */
 * {
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Chart styling untuk light dan dark mode */
+.recharts-cartesian-axis-tick text,
+.recharts-legend-item-text {
+  fill: hsl(var(--muted-foreground));
+}
+
+.dark .recharts-cartesian-axis-tick text,
+.dark .recharts-legend-item-text {
+  fill: hsl(var(--muted-foreground));
+}
+
+.recharts-pie-label-text {
+  fill: hsl(var(--foreground)) !important;
+}
+
+.dark .recharts-pie-label-text {
+  fill: hsl(var(--foreground)) !important;
 }
