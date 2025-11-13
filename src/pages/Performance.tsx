@@ -38,7 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useExport } from "@/hooks/useExport";
-import { format, startOfMonth, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { id as indonesiaLocale } from "date-fns/locale";
 
 // Import Tipe Data dari Employees & Dialog Detail
@@ -118,6 +118,14 @@ const Performance = () => {
     }
     
     try {
+        // Hitung rentang tanggal dari bulan yang dipilih
+        const monthDate = parseISO(month);
+        const monthStart = startOfMonth(monthDate);
+        const monthEnd = endOfMonth(monthDate);
+        const startDate = format(monthStart, "yyyy-MM-dd");
+        const endDate = format(monthEnd, "yyyy-MM-dd");
+
+        // 1. Fetch KPI targets data
         let query = supabase
             .from('kpi_targets')
             .select(`
@@ -133,7 +141,7 @@ const Performance = () => {
                     profile_id,
                     group_id,
                     position,
-                    profiles ( full_name, email, phone, avatar_url, role, status ),
+                    profiles ( full_name, email, phone, avatar_url, role, status, date_of_birth, address ),
                     groups ( name )
                 ),
                 target_month
@@ -150,12 +158,51 @@ const Performance = () => {
         
         const rawData = kpiResults as any[];
 
+        // 2. Fetch omset real-time dari daily_reports untuk bulan yang dipilih
+        // Ambil employee IDs dari kpiResults untuk filter
+        const employeeIds = rawData.map(item => item.employees?.id).filter(Boolean) as string[];
+        
+        let dailyReportsQuery = supabase
+            .from('daily_reports')
+            .select('employee_id, total_sales, report_date, devices!inner(group_id)')
+            .gte('report_date', startDate)
+            .lte('report_date', endDate);
+
+        // Filter berdasarkan group jika diperlukan (melalui devices)
+        if (groupId !== "all") {
+            dailyReportsQuery = dailyReportsQuery.eq('devices.group_id', groupId);
+        }
+
+        const { data: dailyReportsData, error: dailyReportsError } = await dailyReportsQuery;
+        
+        if (dailyReportsError) {
+            console.warn("Error fetching daily reports:", dailyReportsError);
+        }
+
+        // 3. Hitung total omset per employee dari daily_reports
+        const omsetMap = new Map<string, number>();
+        if (dailyReportsData && employeeIds.length > 0) {
+            dailyReportsData.forEach((report: any) => {
+                const empId = report.employee_id;
+                // Hanya hitung jika employee ada di kpiResults (sudah terfilter group)
+                if (employeeIds.includes(empId)) {
+                    const current = omsetMap.get(empId) || 0;
+                    omsetMap.set(empId, current + (report.total_sales || 0));
+                }
+            });
+        }
+
+        // 4. Map data dan gunakan omset dari daily_reports jika tersedia
         const mappedData: PerformanceProfile[] = rawData.map((item) => {
              const emp = item.employees;
              const prof = emp.profiles;
              
+             // Gunakan omset dari daily_reports jika tersedia, fallback ke actual_sales
+             const omsetFromReports = omsetMap.get(emp.id) || 0;
+             const finalOmset = omsetFromReports > 0 ? omsetFromReports : (item.actual_sales || 0);
+             
              const calculatedKpi = calculateTotalKpi(
-                item.actual_sales || 0, item.sales_target,
+                finalOmset, item.sales_target,
                 item.actual_commission || 0, item.commission_target,
                 item.actual_attendance || 0, item.attendance_target
             );
@@ -173,9 +220,11 @@ const Performance = () => {
                 position: emp.position || null,
                 group_name: emp.groups?.name || "N/A",
                 group_id: emp.group_id || null,
+                date_of_birth: prof?.date_of_birth || null,
+                address: prof?.address || null,
                 
-                // PerformanceProfile fields
-                omset: item.actual_sales || 0,
+                // PerformanceProfile fields - menggunakan omset dari daily_reports
+                omset: finalOmset,
                 commission: item.actual_commission || 0,
                 attendance: item.actual_attendance || 0,
                 kpi: calculatedKpi,

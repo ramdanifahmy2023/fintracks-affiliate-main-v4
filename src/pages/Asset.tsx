@@ -393,18 +393,18 @@ const Assets = () => {
                         <TableHead>Kategori</TableHead>
                         <TableHead>Diberikan Kepada</TableHead>
                         <TableHead>Kondisi</TableHead>
-                        <TableHead className="text-right">Total Harga</TableHead> {/* <-- Simplified Header */}
+                        <TableHead className="text-right">Total Harga</TableHead>
                         <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAssets.length === 0 && (
+                      {filteredAssets.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center h-24">
                             {searchTerm || categoryFilter !== 'all' ? "Aset tidak ditemukan." : "Belum ada data aset."}
                           </TableCell>
                         </TableRow>
-                      )}
+                      ) : null}
                       {filteredAssets.map((asset) => (
                         <TableRow key={asset.id}>
                           <TableCell>{formatDate(asset.purchase_date)}</TableCell>
@@ -412,20 +412,16 @@ const Assets = () => {
                           <TableCell>
                             <Badge variant="outline">{asset.category}</Badge>
                           </TableCell>
+                          <TableCell>{(asset as any).assigned_to_name || '-'}</TableCell>
                           <TableCell>
-                            {(asset as any).assigned_to_name || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
+                            <Badge
                               variant={asset.condition === "Baru" ? "default" : (asset.condition === "Bekas" ? "secondary" : "outline")}
                               className={cn(asset.condition === "Baru" ? "bg-green-600 hover:bg-green-600/90" : "")}
                             >
                               {asset.condition || "-"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(asset.purchase_price)}
-                          </TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(asset.purchase_price)}</TableCell>
                           <TableCell className="text-center">
                             {canManageAssets ? (
                               <DropdownMenu>
@@ -439,7 +435,7 @@ const Assets = () => {
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     className="text-destructive"
                                     onClick={() => handleDeleteClick(asset)}
                                   >
