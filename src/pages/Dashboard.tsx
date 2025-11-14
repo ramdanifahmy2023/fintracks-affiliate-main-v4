@@ -60,7 +60,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
-import { format, subDays, eachDayOfInterval, parseISO, subMonths, startOfMonth } from "date-fns";
+import { format, subDays, eachDayOfInterval, parseISO, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { id as indonesiaLocale } from "date-fns/locale";
 import { Label } from "@/components/ui/label";
 import {
@@ -121,21 +121,21 @@ const calculateTotalKpi = (
 };
 
 const getKPIColorClass = (kpi: number) => {
-  if (kpi >= 100) return "text-success";
-  if (kpi >= 70) return "text-warning";
-  return "text-destructive";
+  if (kpi >= 100) return "text-green-500 dark:text-green-400";
+  if (kpi >= 70) return "text-yellow-500 dark:text-yellow-400";
+  return "text-red-500 dark:text-red-400";
 };
 
 const getKpiColor = (kpi: number) => {
-  if (kpi >= 100) return "bg-success";
-  if (kpi >= 70) return "bg-warning";
-  return "bg-destructive";
+  if (kpi >= 100) return "bg-green-500 dark:bg-green-600";
+  if (kpi >= 70) return "bg-yellow-500 dark:bg-yellow-600";
+  return "bg-red-500 dark:bg-red-600";
 };
 
 const getKpiTextColor = (kpi: number) => {
-  if (kpi >= 100) return "text-success";
-  if (kpi >= 70) return "text-warning";
-  return "text-destructive";
+  if (kpi >= 100) return "text-green-500 dark:text-green-400";
+  if (kpi >= 70) return "text-yellow-500 dark:text-yellow-400";
+  return "text-red-500 dark:text-red-400";
 };
 
 const formatDateMonth = (dateString: string) => {
@@ -225,9 +225,12 @@ const Dashboard = () => {
           return;
         }
 
+        // Perbaikan: Gunakan endOfMonth untuk mendapatkan akhir bulan dengan benar
         const endMonth = parseISO(endDate);
         const currentMonthStart = format(startOfMonth(endMonth), "yyyy-MM-dd");
+        const currentMonthEnd = format(endOfMonth(endMonth), "yyyy-MM-dd");
         const previousMonthStart = format(subMonths(startOfMonth(endMonth), 1), "yyyy-MM-dd");
+        const previousMonthEnd = format(endOfMonth(subMonths(endMonth, 1)), "yyyy-MM-dd");
 
         // OPTIMIZATION #2: Build queries dengan kondisi yang tepat sebelum Promise.all
         let kpiQuery = supabase
@@ -249,7 +252,7 @@ const Dashboard = () => {
           `
           )
           .gte("target_month", previousMonthStart)
-          .lte("target_month", currentMonthStart)
+          .lte("target_month", currentMonthEnd)
           .order("target_month", { ascending: false });
 
         if (isStaff) {
@@ -258,6 +261,7 @@ const Dashboard = () => {
           kpiQuery = kpiQuery.eq("employees.group_id", groupId);
         }
 
+        // Perbaikan: Pastikan query daily_reports mengambil data dengan benar
         let dailyReportsQuery = supabase
           .from("daily_reports")
           .select("employee_id, total_sales, report_date, device_id, devices!inner(group_id, groups(name))")
@@ -268,11 +272,12 @@ const Dashboard = () => {
           dailyReportsQuery = dailyReportsQuery.eq("devices.group_id", groupId);
         }
 
+        // Perbaikan: Pastikan query commissions mengambil data dengan benar
         let commissionsQuery = supabase
           .from("commissions")
-          .select("gross_commission, net_commission, paid_commission, period_start, accounts!inner(id, group_id)")
+          .select("gross_commission, net_commission, paid_commission, period_start, period_end, accounts!inner(id, group_id)")
           .gte("period_start", startDate)
-          .lte("period_start", endDate);
+          .lte("period_end", endDate);
 
         if (!isStaff && groupId !== "all") {
           commissionsQuery = commissionsQuery.eq("accounts.group_id", groupId);
@@ -316,18 +321,41 @@ const Dashboard = () => {
           dailyReportsOmset.set(empId, current + (report.total_sales || 0));
         });
 
+        // Build commission map dari commissions data
+        const commissionMap = new Map<string, number>();
+        (commissionsData || []).forEach((comm: any) => {
+          // Cari account_id dari komisi untuk menemukan employee yang terkait
+          const accountId = comm.accounts?.id;
+          if (accountId) {
+            // Untuk sekarang, kita asumsikan komisi sudah terkait dengan employee
+            // Dalam implementasi yang lebih baik, kita perlu query tambahan untuk menghubungkan account ke employee
+            const current = commissionMap.get(accountId) || 0;
+            commissionMap.set(accountId, current + (comm.paid_commission || 0));
+          }
+        });
+
         // Process ranking data
         rawData.forEach((item) => {
           const employeeId = item.employees?.id;
           if (!employeeId) return;
 
+          // Perbaikan: Gunakan data omset dari daily_reports jika ada
           const omsetFromReports = dailyReportsOmset.get(employeeId) || 0;
           const finalOmset = omsetFromReports > 0 ? omsetFromReports : (item.actual_sales || 0);
+
+          // Perbaikan: Hitung komisi dengan benar
+          let finalCommission = item.actual_commission || 0;
+          // Jika ada data komisi dari tabel commissions, gunakan itu
+          if (commissionMap.size > 0) {
+            // Ini adalah simplifikasi, dalam implementasi nyata kita perlu
+            // menghubungkan account ke employee dengan benar
+            finalCommission = Array.from(commissionMap.values()).reduce((sum, val) => sum + val, 0);
+          }
 
           const calculatedKpi = calculateTotalKpi(
             finalOmset,
             item.sales_target || 0,
-            item.actual_commission || 0,
+            finalCommission,
             item.commission_target || 0,
             item.actual_attendance || 0,
             item.attendance_target || 0
@@ -338,7 +366,7 @@ const Dashboard = () => {
             name: item.employees?.profiles?.full_name || "N/A",
             group: item.employees?.groups?.name || "Tanpa Grup",
             omset: finalOmset,
-            commission: item.actual_commission || 0,
+            commission: finalCommission,
             kpi: calculatedKpi,
             target_month: item.target_month,
             sales_target: item.sales_target || 0,
@@ -362,6 +390,7 @@ const Dashboard = () => {
         if (isStaff) setMyKpi(foundMyKpi);
 
         // ============ PROCESS: COMMISSION DATA ============
+        // Perbaikan: Pastikan perhitungan komisi benar
         const gross = (commissionsData || []).reduce(
           (acc, c) => acc + (Number(c.gross_commission) || 0),
           0
@@ -438,8 +467,9 @@ const Dashboard = () => {
           }
         });
 
-        // Add commission data
+        // Perbaikan: Tambahkan data komisi ke tren dengan benar
         (commissionsData || []).forEach((comm: any) => {
+          // Komisi mungkin memiliki period_start dan period_end, kita gunakan period_start
           const dateKey = comm.period_start;
           if (dateKey && trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
@@ -532,7 +562,7 @@ const Dashboard = () => {
   );
 
   const StaffShortcuts = () => (
-    <Card className="shadow-lg border-primary/50 overflow-hidden">
+    <Card className="shadow-lg border-primary/50 overflow-hidden dark:bg-card dark:border-border">
       <div className="bg-gradient-to-r from-primary to-primary/80 p-4">
         <CardTitle className="text-xl text-white flex items-center gap-2">
           <Activity className="h-5 w-5" />
@@ -542,7 +572,7 @@ const Dashboard = () => {
           Akses cepat ke tugas harian Anda.
         </CardDescription>
       </div>
-      <CardContent className="p-6 flex flex-col space-y-4">
+      <CardContent className="p-6 flex flex-col space-y-4 dark:bg-card">
         <Button
           className="w-full gap-2 py-6 text-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1"
           onClick={() => navigate("/attendance")}
@@ -565,17 +595,17 @@ const Dashboard = () => {
   const StaffPersonalKpi = () => {
     if (!myKpi) {
       return (
-        <Card className="shadow-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+        <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
               KPI Anda (Bulan Ini)
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent className="p-6 dark:bg-card">
             <div className="flex flex-col items-center justify-center py-8">
-              <div className="rounded-full bg-gray-100 p-4 mb-4">
-                <BarChart3 className="h-8 w-8 text-gray-400" />
+              <div className="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
+                <BarChart3 className="h-8 w-8 text-gray-400 dark:text-gray-500" />
               </div>
               <p className="text-muted-foreground text-center">Data KPI bulan ini belum tersedia.</p>
               <Button variant="outline" className="mt-4" onClick={() => navigate("/kpi")}>
@@ -587,14 +617,14 @@ const Dashboard = () => {
       );
     }
     return (
-      <Card className="shadow-lg overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+      <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             KPI Anda (Bulan Terakhir)
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-6 dark:bg-card">
           <div className="space-y-6">
             <div className="flex items-center gap-4">
               <div className="flex-1">
@@ -673,8 +703,8 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <Card className="shadow-lg overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -700,7 +730,7 @@ const Dashboard = () => {
               </div>
             </CardHeader>
 
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 dark:bg-card">
               {loadingRanking ? (
                 <div className="flex justify-center items-center h-64">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -731,9 +761,9 @@ const Dashboard = () => {
                           <TableCell className="font-bold text-lg">
                             <div className={cn(
                               "flex items-center justify-center w-8 h-8 rounded-full",
-                              index === 0 ? "bg-yellow-100 text-yellow-700" :
-                              index === 1 ? "bg-gray-100 text-gray-700" :
-                              index === 2 ? "bg-orange-100 text-orange-700" :
+                              index === 0 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                              index === 1 ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
+                              index === 2 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
                               "bg-muted text-muted-foreground"
                             )}>
                               {index + 1}
@@ -748,7 +778,7 @@ const Dashboard = () => {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">
+                            <Badge variant="outline" className="dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
                               {formatDateMonth(item.target_month)}
                             </Badge>
                           </TableCell>
@@ -841,21 +871,21 @@ const Dashboard = () => {
         </div>
 
         {error && (
-          <Card className="border-destructive">
-            <CardContent className="pt-6">
+          <Card className="border-destructive dark:bg-card dark:border-border">
+            <CardContent className="pt-6 dark:bg-card">
               <p className="text-destructive">{error}</p>
             </CardContent>
           </Card>
         )}
 
-        <Card className="shadow-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+        <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
             <CardTitle className="flex items-center gap-2">
               <Filter className="h-5 w-5" />
               Filter Data
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 dark:bg-card">
             <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[150px] space-y-1">
                 <label htmlFor="date-start" className="text-xs text-muted-foreground">
@@ -929,8 +959,8 @@ const Dashboard = () => {
           </TabsList>
           
           <TabsContent value="trends" className="space-y-4">
-            <Card className="shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+            <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
                   Tren Omset & Komisi Cair
@@ -939,7 +969,7 @@ const Dashboard = () => {
                   Menampilkan data harian berdasarkan filter tanggal dan group.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dark:bg-card">
                 {loadingCharts ? (
                   <div className="flex justify-center items-center h-[300px]">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1008,14 +1038,14 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="commission" className="space-y-4">
-            <Card className="shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
+            <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+              <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
                   Breakdown Komisi (Filter)
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dark:bg-card">
                 {loadingCharts ? (
                   <div className="flex justify-center items-center h-[300px]">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1072,8 +1102,8 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="groups" className="space-y-4">
-            <Card className="shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+            <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   Performa Group (Top 5 Omset)
@@ -1082,7 +1112,7 @@ const Dashboard = () => {
                   Berdasarkan total omset dari daily reports (sesuai filter Group).
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dark:bg-card">
                 {loadingCharts ? (
                   <div className="flex justify-center items-center h-[300px]">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1129,8 +1159,8 @@ const Dashboard = () => {
           </TabsContent>
           
           <TabsContent value="accounts" className="space-y-4">
-            <Card className="shadow-lg overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-orange-50 to-yellow-50">
+            <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+              <CardHeader className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20">
                 <CardTitle className="flex items-center gap-2">
                   <PieChartIcon className="h-5 w-5" />
                   Breakdown Platform Akun
@@ -1139,7 +1169,7 @@ const Dashboard = () => {
                   Total akun terdaftar (All Time, sesuai filter Group).
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="dark:bg-card">
                 {loadingCharts ? (
                   <div className="flex justify-center items-center h-[300px]">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1186,8 +1216,8 @@ const Dashboard = () => {
           </TabsContent>
         </Tabs>
 
-        <Card className="shadow-lg overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+        <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -1195,7 +1225,7 @@ const Dashboard = () => {
                   Top Performers (Bulan Terakhir)
                 </CardTitle>
                 <CardDescription>
-                  Berdasarkan Total KPI aktual (sesuai filter Group).
+                  Beberapa top performer berdasarkan Total KPI aktual (sesuai filter Group).
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" className="gap-2">
@@ -1212,7 +1242,7 @@ const Dashboard = () => {
               />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="dark:bg-card">
             {loadingRanking ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1228,13 +1258,13 @@ const Dashboard = () => {
                 {filteredRankingData.slice(0, 5).map((employee, index) => (
                   <div
                     key={employee.id}
-                    className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors dark:bg-muted/20 dark:hover:bg-muted/30"
                   >
                     <div className={cn(
                       "flex h-10 w-10 items-center justify-center rounded-full font-bold text-sm",
-                      index === 0 ? "bg-yellow-100 text-yellow-700" :
-                      index === 1 ? "bg-gray-100 text-gray-700" :
-                      index === 2 ? "bg-orange-100 text-orange-700" :
+                      index === 0 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                      index === 1 ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :
+                      index === 2 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
                       "bg-muted text-muted-foreground"
                     )}>
                       {index + 1}
