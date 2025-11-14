@@ -1,4 +1,5 @@
 // src/pages/Dashboard.tsx
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Input } from "@/components/ui/input";
@@ -210,7 +211,7 @@ const Dashboard = () => {
     fetchAllData(filterDateStart, filterDateEnd, initialGroupId);
   };
 
-  // ============ OPTIMIZATION #1: FETCH SEMUA DATA DALAM 1 CALL ============
+  // ============ OPTIMIZATION: FETCH SEMUA DATA DALAM 1 CALL ============
   const fetchAllData = useCallback(
     async (startDate: string, endDate: string, groupId: string) => {
       setLoadingRanking(true);
@@ -232,7 +233,7 @@ const Dashboard = () => {
         const previousMonthStart = format(subMonths(startOfMonth(endMonth), 1), "yyyy-MM-dd");
         const previousMonthEnd = format(endOfMonth(subMonths(endMonth, 1)), "yyyy-MM-dd");
 
-        // OPTIMIZATION #2: Build queries dengan kondisi yang tepat sebelum Promise.all
+        // OPTIMIZATION: Build queries dengan kondisi yang tepat sebelum Promise.all
         let kpiQuery = supabase
           .from("kpi_targets")
           .select(
@@ -289,7 +290,7 @@ const Dashboard = () => {
           accountsQuery = accountsQuery.eq("group_id", groupId);
         }
 
-        // OPTIMIZATION #3: Execute semua queries secara parallel
+        // OPTIMIZATION: Execute semua queries secara parallel
         const [
           { data: kpiData, error: kpiError },
           { data: dailyReportsData, error: dailyReportsError },
@@ -493,7 +494,7 @@ const Dashboard = () => {
     [employee?.id, isStaff]
   );
 
-  // OPTIMIZATION #4: Fetch Groups hanya sekali pada mount
+  // OPTIMIZATION: Fetch Groups hanya sekali pada mount
   useEffect(() => {
     const fetchGroups = async () => {
       try {
@@ -521,7 +522,7 @@ const Dashboard = () => {
     }
   }, [profile, employee, isStaff]);
 
-  // OPTIMIZATION #5: Debounced real-time subscription untuk menghindari refresh berlebihan
+  // OPTIMIZATION: Debounced real-time subscription untuk menghindari refresh berlebihan
   useEffect(() => {
     if (!profile || !employee) return;
 
@@ -855,7 +856,7 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleFilterSubmit}>
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>

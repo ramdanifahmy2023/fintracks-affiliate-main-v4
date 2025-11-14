@@ -17,10 +17,10 @@ import {
   AlertCircle
 } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { format, parseISO } from "date-fns"; // Import parseISO
+import { format, parseISO } from "date-fns";
 
 interface DashboardMetrics {
-  grossCommission: number; // Ini akan kita isi dengan TOTAL OMSET
+  grossRevenue: number; // Total Omset dari daily_reports
   netCommission: number;
   paidCommission: number;
   totalExpenses: number;
@@ -37,15 +37,12 @@ interface TrendData {
   percentage: number;
 }
 
-// --- BARU: Props untuk Menerima Filter dari Dashboard.tsx ---
 interface DashboardStatsProps {
   filterDateStart: string;
   filterDateEnd: string;
   filterGroup: string;
 }
-// -------------------------------------------------------------
 
-// --- UPDATE KOMPONEN UNTUK MENGGUNAKAN PROPS ---
 const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: DashboardStatsProps) => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [trends, setTrends] = useState<Record<string, TrendData>>({});
@@ -55,13 +52,12 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Gunakan props
+      // Gunakan props filter
       const startOfThisPeriod = filterDateStart;
       const endOfThisPeriod = filterDateEnd;
       
       // Hitung rentang waktu sebelumnya dengan panjang yang sama
       const currentPeriodStart = parseISO(startOfThisPeriod);
-      // Hitung selisih hari
       const timeSpanMs = parseISO(endOfThisPeriod).getTime() - currentPeriodStart.getTime();
       
       // Periode sebelumnya berakhir 1 hari sebelum periode ini dimulai
@@ -71,39 +67,10 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
       
       const groupId = filterGroup;
 
-
-      // --- 1. Fetch commission data (Periode Ini) ---
-      // PERBAIKAN: Hapus gross_commission, ganti filter ke period_start
-      let commsQuery = supabase
-        .from('commissions')
-        .select('net_commission, paid_commission, accounts!inner(group_id)')
-        .gte('period_start', startOfThisPeriod) // GANTI DARI payment_date
-        .lte('period_start', endOfThisPeriod);  // GANTI DARI payment_date
-
-      // FIX: Apply Group Filter
-      if (groupId !== 'all') {
-        commsQuery = commsQuery.eq('accounts.group_id', groupId);
-      }
-      const { data: commissions } = await commsQuery;
-
-      // --- 2. Fetch expenses (Periode Ini) ---
-      let expensesQuery = supabase
-        .from('cashflow')
-        .select('amount')
-        .eq('type', 'expense')
-        .gte('transaction_date', startOfThisPeriod) // Filter berdasarkan tanggal transaksi
-        .lte('transaction_date', endOfThisPeriod);
-          
-      // FIX: Apply Group Filter
-      if (groupId !== 'all') {
-        expensesQuery = expensesQuery.eq('group_id', groupId);
-      }
-      const { data: expenses } = await expensesQuery;
-      
-      // --- 1b. [KODE BARU] Fetch Omset (Periode Ini) from daily_reports ---
+      // 1. Fetch Omset data (Periode Ini) dari daily_reports
       let omsetQuery = supabase
         .from('daily_reports')
-        .select('total_sales, devices!inner(group_id)') // Join devices untuk filter group
+        .select('total_sales, devices!inner(group_id)')
         .gte('report_date', startOfThisPeriod)
         .lte('report_date', endOfThisPeriod);
 
@@ -111,47 +78,42 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
         omsetQuery = omsetQuery.eq('devices.group_id', groupId);
       }
       const { data: omsetData } = await omsetQuery;
-      // -------------------------------------------------------------
 
-      // --- 3. Hitung Totals Periode Ini ---
-      // PERBAIKAN: grossTotal sekarang dari omsetData
-      const grossTotal = omsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
+      // 2. Fetch commission data (Periode Ini)
+      let commsQuery = supabase
+        .from('commissions')
+        .select('net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('period_start', startOfThisPeriod)
+        .lte('period_start', endOfThisPeriod);
+
+      if (groupId !== 'all') {
+        commsQuery = commsQuery.eq('accounts.group_id', groupId);
+      }
+      const { data: commissions } = await commsQuery;
+
+      // 3. Fetch expenses (Periode Ini)
+      let expensesQuery = supabase
+        .from('cashflow')
+        .select('amount')
+        .eq('type', 'expense')
+        .gte('transaction_date', startOfThisPeriod)
+        .lte('transaction_date', endOfThisPeriod);
+          
+      if (groupId !== 'all') {
+        expensesQuery = expensesQuery.eq('group_id', groupId);
+      }
+      const { data: expenses } = await expensesQuery;
+      
+      // 4. Hitung Totals Periode Ini
+      const grossRevenue = omsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
       const netTotal = commissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const paidTotal = commissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const expensesTotal = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
 
-      // --- 4. Fetch commission data (Periode Sebelumnya) ---
-      // PERBAIKAN: Hapus gross_commission, ganti filter ke period_start
-      let prevCommsQuery = supabase
-        .from('commissions')
-        .select('net_commission, paid_commission, accounts!inner(group_id)')
-        .gte('period_start', startOfPrevPeriod) 
-        .lte('period_start', endOfPrevPeriod);
-        
-      // FIX: Apply Group Filter for previous period
-      if (groupId !== 'all') {
-         prevCommsQuery = prevCommsQuery.eq('accounts.group_id', groupId);
-      }
-      const { data: prevCommissions } = await prevCommsQuery;
-
-      // --- 5. Fetch expenses (Periode Sebelumnya) ---
-      let prevExpensesQuery = supabase
-        .from('cashflow')
-        .select('amount')
-        .eq('type', 'expense')
-        .gte('transaction_date', startOfPrevPeriod)
-        .lte('transaction_date', endOfPrevPeriod);
-          
-      // FIX: Apply Group Filter for previous period
-      if (groupId !== 'all') {
-        prevExpensesQuery = prevExpensesQuery.eq('group_id', groupId);
-      }
-      const { data: prevExpenses } = await prevExpensesQuery;
-
-      // --- 4b. [KODE BARU] Fetch Omset (Periode Sebelumnya) from daily_reports ---
+      // 5. Fetch Omset data (Periode Sebelumnya)
       let prevOmsetQuery = supabase
         .from('daily_reports')
-        .select('total_sales, devices!inner(group_id)') // Join devices
+        .select('total_sales, devices!inner(group_id)')
         .gte('report_date', startOfPrevPeriod)
         .lte('report_date', endOfPrevPeriod);
 
@@ -159,11 +121,34 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
         prevOmsetQuery = prevOmsetQuery.eq('devices.group_id', groupId);
       }
       const { data: prevOmsetData } = await prevOmsetQuery;
-      // -----------------------------------------------------------------
 
-      // --- 6. Hitung Totals Periode Sebelumnya ---
-      // PERBAIKAN: prevGrossTotal sekarang dari prevOmsetData
-      const prevGrossTotal = prevOmsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
+      // 6. Fetch commission data (Periode Sebelumnya)
+      let prevCommsQuery = supabase
+        .from('commissions')
+        .select('net_commission, paid_commission, accounts!inner(group_id)')
+        .gte('period_start', startOfPrevPeriod) 
+        .lte('period_start', endOfPrevPeriod);
+        
+      if (groupId !== 'all') {
+         prevCommsQuery = prevCommsQuery.eq('accounts.group_id', groupId);
+      }
+      const { data: prevCommissions } = await prevCommsQuery;
+
+      // 7. Fetch expenses (Periode Sebelumnya)
+      let prevExpensesQuery = supabase
+        .from('cashflow')
+        .select('amount')
+        .eq('type', 'expense')
+        .gte('transaction_date', startOfPrevPeriod)
+        .lte('transaction_date', endOfPrevPeriod);
+          
+      if (groupId !== 'all') {
+        prevExpensesQuery = prevExpensesQuery.eq('group_id', groupId);
+      }
+      const { data: prevExpenses } = await prevExpensesQuery;
+
+      // 8. Hitung Totals Periode Sebelumnya
+      const prevGrossRevenue = prevOmsetData?.reduce((sum, r) => sum + (r.total_sales || 0), 0) || 0;
       const prevNetTotal = prevCommissions?.reduce((sum, c) => sum + (c.net_commission || 0), 0) || 0;
       const prevPaidTotal = prevCommissions?.reduce((sum, c) => sum + (c.paid_commission || 0), 0) || 0;
       const prevExpensesTotal = prevExpenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
@@ -190,15 +175,15 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
       });
 
       const newTrends = {
-        grossCommission: calculateTrend(grossTotal, prevGrossTotal), // Ini sekarang Omset Trend
+        grossRevenue: calculateTrend(grossRevenue, prevGrossRevenue),
         netCommission: calculateTrend(netTotal, prevNetTotal),
         paidCommission: calculateTrend(paidTotal, prevPaidTotal),
         expenses: calculateTrend(expensesTotal, prevExpensesTotal)
       };
       
-      // --- 7. Update Metrics State ---
+      // Update Metrics State
       setMetrics({
-        grossCommission: grossTotal, // Ini sekarang berisi TOTAL OMSET
+        grossRevenue: grossRevenue,
         netCommission: netTotal,
         paidCommission: paidTotal,
         totalExpenses: expensesTotal,
@@ -216,10 +201,9 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
     } finally {
       setIsLoading(false);
     }
-  }, [filterDateStart, filterDateEnd, filterGroup]); // Dependensi pada props filter
+  }, [filterDateStart, filterDateEnd, filterGroup]);
 
-
-  // --- BARU: useEffect untuk memicu fetch saat filter props berubah ---
+  // useEffect untuk memicu fetch saat filter props berubah
   useEffect(() => {
     fetchDashboardData();
     
@@ -349,16 +333,13 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
 
       {/* Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        
-        {/* --- PERBAIKAN JUDUL KARTU --- */}
         <MetricCard
           title="Total Omset"
-          value={formatCurrency(metrics.grossCommission)}
-          trend={trends.grossCommission}
+          value={formatCurrency(metrics.grossRevenue)}
+          trend={trends.grossRevenue}
           icon={DollarSign}
           subtitle="Total penjualan dari Laporan Harian"
         />
-        {/* ----------------------------- */}
         
         <MetricCard
           title="Komisi Bersih"
@@ -460,8 +441,8 @@ const DashboardStats = ({ filterDateStart, filterDateEnd, filterGroup }: Dashboa
               <div>
                 <p className="text-orange-600 dark:text-orange-400 text-sm font-medium">Conversion</p>
                 <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">
-                  {metrics.paidCommission > 0 && metrics.grossCommission > 0 ? 
-                    ((metrics.paidCommission / metrics.grossCommission) * 100).toFixed(1) + '%'
+                  {metrics.paidCommission > 0 && metrics.grossRevenue > 0 ? 
+                    ((metrics.paidCommission / metrics.grossRevenue) * 100).toFixed(1) + '%'
                     : '0%'
                   }
                 </p>
