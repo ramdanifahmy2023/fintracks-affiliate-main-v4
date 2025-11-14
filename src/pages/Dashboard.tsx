@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,21 @@ import {
   DollarSign,
   TrendingUp,
   FileText,
+  Users,
+  Activity,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Target,
+  Award,
+  Bell,
+  Settings,
+  Filter,
+  RefreshCw,
+  Download,
+  Eye,
+  ArrowUp,
+  ArrowDown,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   LineChart,
@@ -25,6 +41,8 @@ import {
   PieChart,
   Pie,
   Cell,
+  Area,
+  AreaChart,
 } from "recharts";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -52,6 +70,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 
 interface EmployeePerformance {
   id: string;
@@ -127,6 +155,8 @@ const CHART_COLORS = {
   yellow: "hsl(var(--chart-3))",
   shopee: "hsl(var(--chart-1))",
   tiktok: "hsl(var(--chart-2))",
+  purple: "hsl(var(--chart-4))",
+  orange: "hsl(var(--chart-5))",
 };
 
 const Dashboard = () => {
@@ -502,21 +532,26 @@ const Dashboard = () => {
   );
 
   const StaffShortcuts = () => (
-    <Card className="shadow-lg border-primary/50">
-      <CardHeader>
-        <CardTitle className="text-xl text-primary">Aksi Cepat Staff</CardTitle>
-        <CardDescription>Akses cepat ke tugas harian Anda.</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col space-y-3">
+    <Card className="shadow-lg border-primary/50 overflow-hidden">
+      <div className="bg-gradient-to-r from-primary to-primary/80 p-4">
+        <CardTitle className="text-xl text-white flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          Aksi Cepat Staff
+        </CardTitle>
+        <CardDescription className="text-primary-100">
+          Akses cepat ke tugas harian Anda.
+        </CardDescription>
+      </div>
+      <CardContent className="p-6 flex flex-col space-y-4">
         <Button
-          className="w-full gap-2 py-6 text-lg"
+          className="w-full gap-2 py-6 text-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1"
           onClick={() => navigate("/attendance")}
         >
           <Calendar className="h-6 w-6" />
           Absensi (Check-in/Check-out)
         </Button>
         <Button
-          className="w-full gap-2 py-6 text-lg"
+          className="w-full gap-2 py-6 text-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1"
           variant="secondary"
           onClick={() => navigate("/daily-report")}
         >
@@ -530,26 +565,37 @@ const Dashboard = () => {
   const StaffPersonalKpi = () => {
     if (!myKpi) {
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle>KPI Anda (Bulan Ini)</CardTitle>
+        <Card className="shadow-lg overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              KPI Anda (Bulan Ini)
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Data KPI bulan ini belum tersedia.</p>
+          <CardContent className="p-6">
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="rounded-full bg-gray-100 p-4 mb-4">
+                <BarChart3 className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-muted-foreground text-center">Data KPI bulan ini belum tersedia.</p>
+              <Button variant="outline" className="mt-4" onClick={() => navigate("/kpi")}>
+                Lihat Target KPI
+              </Button>
+            </div>
           </CardContent>
         </Card>
       );
     }
     return (
-      <Card className="shadow-lg border-primary/50">
-        <CardHeader>
+      <Card className="shadow-lg overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             KPI Anda (Bulan Terakhir)
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="p-6">
+          <div className="space-y-6">
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <p className="font-medium text-lg">{myKpi.name}</p>
@@ -561,7 +607,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-semibold">Total KPI</span>
                 <span
@@ -578,6 +624,25 @@ const Dashboard = () => {
                 className={cn("h-3 w-full", getKpiColor(myKpi.kpi))}
               />
             </div>
+
+            <div className="grid grid-cols-3 gap-4 pt-2">
+              <div className="text-center">
+                <p className="text-lg font-semibold">{formatCurrency(myKpi.omset)}</p>
+                <p className="text-xs text-muted-foreground">Omset</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold">{formatCurrency(myKpi.commission)}</p>
+                <p className="text-xs text-muted-foreground">Komisi</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold">{myKpi.actual_attendance || 0}/{myKpi.attendance_target}</p>
+                <p className="text-xs text-muted-foreground">Kehadiran</p>
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={() => navigate("/kpi")}>
+              Lihat Detail KPI
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -588,7 +653,18 @@ const Dashboard = () => {
     return (
       <MainLayout>
         <div className="space-y-6">
-          <h1 className="text-3xl font-bold">Dashboard Kinerja Anda</h1>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Dashboard Kinerja Anda</h1>
+              <p className="text-muted-foreground">
+                Selamat datang kembali, {profile?.full_name || "User"}!
+              </p>
+            </div>
+            <Button variant="outline" className="gap-2" onClick={() => navigate("/notifications")}>
+              <Bell className="h-4 w-4" />
+              Notifikasi
+            </Button>
+          </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <StaffShortcuts />
@@ -597,18 +673,31 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Ranking Karyawan Staff Keseluruhan</CardTitle>
-              <CardDescription>
-                Performa KPI seluruh karyawan dengan role Staff (Bulan Terakhir).
-              </CardDescription>
-              <Input
-                placeholder="Cari nama karyawan..."
-                className="w-full mt-2"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <Card className="shadow-lg overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Award className="h-5 w-5" />
+                    Ranking Karyawan Staff Keseluruhan
+                  </CardTitle>
+                  <CardDescription>
+                    Performa KPI seluruh karyawan dengan role Staff (Bulan Terakhir).
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              </div>
+              <div className="mt-4">
+                <Input
+                  placeholder="Cari nama karyawan..."
+                  className="w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </CardHeader>
 
             <CardContent className="pt-0">
@@ -638,9 +727,17 @@ const Dashboard = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredRankingData.map((item, index) => (
-                        <TableRow key={item.id}>
+                        <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="font-bold text-lg">
-                            #{index + 1}
+                            <div className={cn(
+                              "flex items-center justify-center w-8 h-8 rounded-full",
+                              index === 0 ? "bg-yellow-100 text-yellow-700" :
+                              index === 1 ? "bg-gray-100 text-gray-700" :
+                              index === 2 ? "bg-orange-100 text-orange-700" :
+                              "bg-muted text-muted-foreground"
+                            )}>
+                              {index + 1}
+                            </div>
                           </TableCell>
                           <TableCell className="font-medium">
                             <div className="flex flex-col">
@@ -720,7 +817,28 @@ const Dashboard = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Dashboard Utama</h1>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard Utama</h1>
+            <p className="text-muted-foreground">
+              Selamat datang kembali, {profile?.full_name || "User"}!
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Pengaturan
+            </Button>
+          </div>
+        </div>
 
         {error && (
           <Card className="border-destructive">
@@ -730,7 +848,13 @@ const Dashboard = () => {
           </Card>
         )}
 
-        <Card>
+        <Card className="shadow-lg overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filter Data
+            </CardTitle>
+          </CardHeader>
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[150px] space-y-1">
@@ -776,7 +900,7 @@ const Dashboard = () => {
 
               <Button
                 onClick={handleFilterSubmit}
-                className="gap-2"
+                className="gap-2 shadow-md hover:shadow-lg transition-all duration-200"
                 disabled={loadingCharts || loadingRanking}
               >
                 {loadingCharts || loadingRanking ? (
@@ -796,302 +920,375 @@ const Dashboard = () => {
           filterGroup={filterGroup}
         />
 
-        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Tren Omset & Komisi Cair</CardTitle>
-              <CardDescription>
-                Menampilkan data harian berdasarkan filter tanggal dan group.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingCharts ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : salesTrendData.length === 0 ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <p className="text-muted-foreground">Tidak ada data tren penjualan.</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={salesTrendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                      tickFormatter={(val) => formatCurrencyForChart(val)}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                        color: "hsl(var(--foreground))",
-                      }}
-                      formatter={(value: number) => formatCurrencyForChart(value)}
-                    />
-                    <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
-                    <Line
-                      type="monotone"
-                      dataKey="sales"
-                      stroke={CHART_COLORS.blue}
-                      strokeWidth={2}
-                      name="Omset Harian"
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="commission"
-                      stroke={CHART_COLORS.green}
-                      strokeWidth={2}
-                      name="Komisi Cair"
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="trends" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="trends">Tren Penjualan</TabsTrigger>
+            <TabsTrigger value="commission">Komisi</TabsTrigger>
+            <TabsTrigger value="groups">Performa Grup</TabsTrigger>
+            <TabsTrigger value="accounts">Platform Akun</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="trends" className="space-y-4">
+            <Card className="shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Tren Omset & Komisi Cair
+                </CardTitle>
+                <CardDescription>
+                  Menampilkan data harian berdasarkan filter tanggal dan group.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingCharts ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : salesTrendData.length === 0 ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <p className="text-muted-foreground">Tidak ada data tren penjualan.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={salesTrendData}>
+                      <defs>
+                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={CHART_COLORS.blue} stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor={CHART_COLORS.blue} stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorCommission" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={CHART_COLORS.green} stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor={CHART_COLORS.green} stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis
+                        dataKey="date"
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(val) => formatCurrencyForChart(val)}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                          color: "hsl(var(--foreground))",
+                        }}
+                        formatter={(value: number) => formatCurrencyForChart(value)}
+                      />
+                      <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
+                      <Area
+                        type="monotone"
+                        dataKey="sales"
+                        stroke={CHART_COLORS.blue}
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorSales)"
+                        name="Omset Harian"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="commission"
+                        stroke={CHART_COLORS.green}
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorCommission)"
+                        name="Komisi Cair"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="commission" className="space-y-4">
+            <Card className="shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Breakdown Komisi (Filter)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingCharts ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : commissionData.length === 0 ||
+                  commissionData.every((item) => item.value === 0) ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <p className="text-muted-foreground">
+                      Tidak ada data komisi untuk periode ini.
+                    </p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={commissionData} layout="horizontal">
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
+                      />
+                      <XAxis
+                        type="number"
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(val) => formatCurrencyForChart(val)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                          color: "hsl(var(--foreground))",
+                        }}
+                        formatter={(value: number) => formatCurrencyForChart(value)}
+                      />
+                      <Bar
+                        dataKey="value"
+                        radius={[0, 8, 8, 0]}
+                        name="Nilai"
+                      >
+                        {commissionData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="groups" className="space-y-4">
+            <Card className="shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Performa Group (Top 5 Omset)
+                </CardTitle>
+                <CardDescription>
+                  Berdasarkan total omset dari daily reports (sesuai filter Group).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingCharts ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={groupData} layout="horizontal">
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
+                      />
+                      <XAxis
+                        type="number"
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(val) => formatCurrencyForChart(val)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        stroke="hsl(var(--muted-foreground))"
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                          color: "hsl(var(--foreground))",
+                        }}
+                        formatter={(value: number) => formatCurrencyForChart(value)}
+                      />
+                      <Bar
+                        dataKey="omset"
+                        fill={CHART_COLORS.purple}
+                        radius={[0, 8, 8, 0]}
+                        name="Omset"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="accounts" className="space-y-4">
+            <Card className="shadow-lg overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-orange-50 to-yellow-50">
+                <CardTitle className="flex items-center gap-2">
+                  <PieChartIcon className="h-5 w-5" />
+                  Breakdown Platform Akun
+                </CardTitle>
+                <CardDescription>
+                  Total akun terdaftar (All Time, sesuai filter Group).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingCharts ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : accountData.length === 0 ||
+                  (accountData[0]?.value === 0 && accountData[1]?.value === 0) ? (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <p className="text-muted-foreground">Tidak ada data akun.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={accountData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) =>
+                          `${name} (${(percent * 100).toFixed(0)}%)`
+                        }
+                        outerRadius={100}
+                        fill={CHART_COLORS.blue}
+                        dataKey="value"
+                      >
+                        {accountData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                          color: "hsl(var(--foreground))",
+                        }}
+                        formatter={(value) => `${value} Akun`}
+                      />
+                      <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Breakdown Komisi (Filter)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingCharts ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : commissionData.length === 0 ||
-                commissionData.every((item) => item.value === 0) ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <p className="text-muted-foreground">
-                    Tidak ada data komisi untuk periode ini.
-                  </p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={commissionData} layout="vertical">
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="hsl(var(--border))"
-                    />
-                    <XAxis
-                      type="number"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                      tickFormatter={(val) => formatCurrencyForChart(val)}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                        color: "hsl(var(--foreground))",
-                      }}
-                      formatter={(value: number) => formatCurrencyForChart(value)}
-                    />
-                    <Bar
-                      dataKey="value"
-                      fill={CHART_COLORS.blue}
-                      radius={[0, 8, 8, 0]}
-                      name="Nilai"
-                    >
-                      {commissionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="md:col-span-1">
-            <CardHeader>
-              <CardTitle>Performa Group (Top 5 Omset)</CardTitle>
-              <CardDescription>
-                Berdasarkan total omset dari daily reports (sesuai filter Group).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingCharts ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={groupData} layout="vertical">
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="hsl(var(--border))"
-                    />
-                    <XAxis
-                      type="number"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                      tickFormatter={(val) => formatCurrencyForChart(val)}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                        color: "hsl(var(--foreground))",
-                      }}
-                      formatter={(value: number) => formatCurrencyForChart(value)}
-                    />
-                    <Bar
-                      dataKey="omset"
-                      fill={CHART_COLORS.blue}
-                      radius={[0, 8, 8, 0]}
-                      name="Omset"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="md:col-span-1">
-            <CardHeader>
-              <CardTitle>Breakdown Platform Akun</CardTitle>
-              <CardDescription>
-                Total akun terdaftar (All Time, sesuai filter Group).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingCharts ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : accountData.length === 0 ||
-                (accountData[0]?.value === 0 && accountData[1]?.value === 0) ? (
-                <div className="flex justify-center items-center h-[300px]">
-                  <p className="text-muted-foreground">Tidak ada data akun.</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={accountData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
-                      outerRadius={100}
-                      fill={CHART_COLORS.blue}
-                      dataKey="value"
-                    >
-                      {accountData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                        color: "hsl(var(--foreground))",
-                      }}
-                      formatter={(value) => `${value} Akun`}
-                    />
-                    <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Top Performers (Bulan Terakhir)</CardTitle>
-              <CardDescription>
-                Berdasarkan Total KPI aktual (sesuai filter Group).
-              </CardDescription>
+        <Card className="shadow-lg overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  Top Performers (Bulan Terakhir)
+                </CardTitle>
+                <CardDescription>
+                  Berdasarkan Total KPI aktual (sesuai filter Group).
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Eye className="h-4 w-4" />
+                Lihat Semua
+              </Button>
+            </div>
+            <div className="mt-4">
               <Input
                 placeholder="Cari nama karyawan..."
-                className="w-full mt-2"
+                className="w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-            </CardHeader>
-            <CardContent>
-              {loadingRanking ? (
-                <div className="flex justify-center items-center h-64">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : filteredRankingData.length === 0 ? (
-                <div className="flex justify-center items-center h-64">
-                  <p className="text-center text-muted-foreground">
-                    Tidak ada data ranking ditemukan.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {filteredRankingData.slice(0, 5).map((employee, index) => (
-                    <div
-                      key={employee.id}
-                      className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{employee.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Progress
-                            value={employee.kpi}
-                            className={cn(
-                              "flex-1 h-1.5",
-                              getKpiColor(employee.kpi)
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "text-xs w-12 text-right font-semibold",
-                              getKPIColorClass(employee.kpi)
-                            )}
-                          >
-                            {employee.kpi.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">
-                          {formatCurrency(employee.omset)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Omset</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingRanking ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : filteredRankingData.length === 0 ? (
+              <div className="flex justify-center items-center h-64">
+                <p className="text-center text-muted-foreground">
+                  Tidak ada data ranking ditemukan.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {filteredRankingData.slice(0, 5).map((employee, index) => (
+                  <div
+                    key={employee.id}
+                    className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  >
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full font-bold text-sm",
+                      index === 0 ? "bg-yellow-100 text-yellow-700" :
+                      index === 1 ? "bg-gray-100 text-gray-700" :
+                      index === 2 ? "bg-orange-100 text-orange-700" :
+                      "bg-muted text-muted-foreground"
+                    )}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{employee.name}</p>
+                      <p className="text-sm text-muted-foreground">{employee.group}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Progress
+                          value={employee.kpi}
+                          className={cn(
+                            "flex-1 h-2",
+                            getKpiColor(employee.kpi)
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "text-xs w-12 text-right font-semibold",
+                            getKPIColorClass(employee.kpi)
+                          )}
+                        >
+                          {employee.kpi.toFixed(1)}%
+                        </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(employee.omset)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Omset</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Buka menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => navigate(`/employees/${employee.id}`)}>
+                          Lihat Detail
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/kpi?employee=${employee.id}`)}>
+                          Lihat KPI
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );

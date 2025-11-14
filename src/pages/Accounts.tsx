@@ -1,8 +1,10 @@
+// src/pages/Accounts.tsx
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Plus,
   Search,
@@ -19,6 +21,18 @@ import {
   XCircle,
   Clock,
   Info,
+  Filter,
+  RefreshCw,
+  Grid,
+  List,
+  Users,
+  Activity,
+  Smartphone,
+  TrendingUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import {
   Table,
@@ -36,6 +50,17 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -43,7 +68,6 @@ import { AddAccountDialog } from "@/components/Account/AddAccountDialog";
 import { EditAccountDialog } from "@/components/Account/EditAccountDialog";
 import { DeleteAccountAlert } from "@/components/Account/DeleteAccountAlert";
 import { BulkImportDialog } from "@/components/Account/BulkImportDialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useExport } from "@/hooks/useExport";
 
@@ -58,6 +82,7 @@ type AccountData = {
   groups: {
     name: string;
   } | null;
+  created_at?: string;
 };
 
 type DialogState = {
@@ -122,6 +147,13 @@ const Accounts = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [platformFilter, setPlatformFilter] = useState("all");
   const [accountStatusFilter, setAccountStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const { exportToPDF, exportToCSV, isExporting, printData } = useExport();
 
@@ -139,7 +171,12 @@ const Accounts = () => {
   const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Calculate pagination range
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Build query with filters
+      let query = supabase
         .from("accounts")
         .select(`
           id,
@@ -149,11 +186,25 @@ const Accounts = () => {
           phone,
           account_status,
           data_status,
-          groups ( name )
-        `)
-        .order("created_at", { ascending: false });
+          groups ( name ),
+          created_at
+        `, { count: 'exact' })
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      // Apply filters
+      if (platformFilter !== "all") {
+        query = query.eq("platform", platformFilter);
+      }
+      if (accountStatusFilter !== "all") {
+        query = query.eq("account_status", accountStatusFilter);
+      }
+
+      const { data, error, count } = await query;
+
       if (error) throw error;
       setAccounts(data as any);
+      setTotalCount(count || 0);
     } catch (error: any) {
       toast.error("Gagal memuat data akun.");
       console.error(error);
@@ -164,18 +215,10 @@ const Accounts = () => {
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [currentPage, pageSize, platformFilter, accountStatusFilter]);
 
   useEffect(() => {
     const results = accounts
-      .filter((acc) => {
-        if (platformFilter === "all") return true;
-        return acc.platform === platformFilter;
-      })
-      .filter((acc) => {
-        if (accountStatusFilter === "all") return true;
-        return acc.account_status === accountStatusFilter;
-      })
       .filter((acc) => {
         return (
           acc.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -183,7 +226,12 @@ const Accounts = () => {
         );
       });
     setFilteredAccounts(results);
-  }, [searchTerm, platformFilter, accountStatusFilter, accounts]);
+  }, [searchTerm, accounts]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [platformFilter, accountStatusFilter, pageSize]);
 
   const handleEditClick = (account: AccountData) => {
     setDialogs({ ...dialogs, edit: account });
@@ -347,299 +395,521 @@ const Accounts = () => {
   const prettyPlatform = (p: AccountData["platform"]) =>
     p === "shopee" ? "Shopee" : p === "tiktok" ? "TikTok" : p;
 
+  // Render pagination
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-4">
+        <p className="text-sm text-muted-foreground">
+          Menampilkan {filteredAccounts.length} dari {totalCount} akun
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Baris per halaman:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className={cn(currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer")}
+              />
+            </PaginationItem>
+            
+            {/* Show page numbers */}
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <PaginationItem key={pageNum}>
+                  <PaginationLink 
+                    onClick={() => setCurrentPage(pageNum)}
+                    isActive={currentPage === pageNum}
+                    className="cursor-pointer"
+                  >
+                    {pageNum}
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            })}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className={cn(currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer")}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Daftar Akun Affiliate</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
+            <h1 className="text-3xl font-bold tracking-tight">Daftar Akun Affiliate</h1>
+            <p className="text-muted-foreground">
               Kelola akun Shopee dan TikTok affiliate.
             </p>
           </div>
-          {canManageAccounts && (
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                className="gap-2 w-full sm:w-auto"
-                onClick={() => setDialogs({ ...dialogs, import: true })}
-              >
-                <Upload className="h-4 w-4" />
-                Import CSV
-              </Button>
-              <Button
-                className="gap-2 w-full sm:w-auto"
-                onClick={() => setDialogs({ ...dialogs, add: true })}
-              >
-                <Plus className="h-4 w-4" />
-                Tambah Akun
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={fetchAccounts}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2" disabled={isExporting || filteredAccounts.length === 0}>
+                  <Download className="h-4 w-4" />
+                  {isExporting ? 'Mengekspor...' : 'Export'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('pdf')} disabled={isExporting}>
+                  Export PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('csv')} disabled={isExporting}>
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport('print')} disabled={isExporting}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Cetak Halaman
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {canManageAccounts && (
+              <>
+                <Button variant="outline" className="gap-2" onClick={() => setDialogs({ ...dialogs, import: true })}>
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </Button>
+                <Button className="gap-2" onClick={() => setDialogs({ ...dialogs, add: true })}>
+                  <Plus className="h-4 w-4" />
+                  Tambah Akun
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
+        {/* Statistics Cards */}
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Accounts
+          <Card className="shadow-lg overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-blue-100">
+              <CardTitle className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                <UserCircle className="h-4 w-4" />
+                Total Akun
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : accounts.length}</div>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : accounts.length}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">All platforms</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active Accounts
+          <Card className="shadow-lg overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-green-50 to-green-100">
+              <CardTitle className="text-sm font-medium text-green-700 flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Akun Aktif
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">
-                {loading ? "..." : activeCount}
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : activeCount}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Active rate</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {accounts.length > 0 ? `${((activeCount / accounts.length) * 100).toFixed(1)}% dari total` : "0%"}
+              </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Shopee Accounts
+          <Card className="shadow-lg overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-orange-50 to-orange-100">
+              <CardTitle className="text-sm font-medium text-orange-700 flex items-center gap-2">
+                <Smartphone className="h-4 w-4" />
+                Akun Shopee
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : shopeeCount}</div>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : shopeeCount}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">Primary platform</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                TikTok Accounts
+          <Card className="shadow-lg overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-purple-50 to-purple-100">
+              <CardTitle className="text-sm font-medium text-purple-700 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Akun TikTok
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{loading ? "..." : tiktokCount}</div>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : tiktokCount}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">Secondary platform</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div className="relative flex-1">
+        {/* Filter Card */}
+        <Card className="shadow-lg overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filter & Pencarian
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="search-account">Cari Akun</Label>
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
+                    id="search-account"
                     placeholder="Cari username atau email..."
-                    className="pl-10 w-full"
+                    className="pl-10"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="gap-2 w-full sm:w-auto"
-                      disabled={isExporting || filteredAccounts.length === 0}
-                    >
-                      <Download className="h-4 w-4" />
-                      {isExporting ? "Mengekspor..." : "Export"}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting}>
-                      Export PDF
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting}>
-                      Export CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleExport("print")} disabled={isExporting}>
-                      <Printer className="mr-2 h-4 w-4" />
-                      Cetak Halaman
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Tabs
-                  value={platformFilter}
-                  onValueChange={setPlatformFilter}
-                  className="w-full sm:w-auto"
-                >
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="all">Semua</TabsTrigger>
-                    <TabsTrigger value="shopee">Shopee</TabsTrigger>
-                    <TabsTrigger value="tiktok">TikTok</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <Tabs
-                  value={accountStatusFilter}
-                  onValueChange={setAccountStatusFilter}
-                  className="w-full sm:w-auto"
-                >
-                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-                    <TabsTrigger value="all" className="text-xs sm:text-sm">
-                      Semua
-                    </TabsTrigger>
-                    <TabsTrigger value="active" className="text-xs sm:text-sm">
-                      Aktif
-                    </TabsTrigger>
-                    <TabsTrigger value="banned_temporary" className="text-xs sm:text-sm">
-                      Ban Sementara
-                    </TabsTrigger>
-                    <TabsTrigger value="banned_permanent" className="text-xs sm:text-sm">
-                      Ban Permanen
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+              <div className="flex flex-col md:flex-row gap-2">
+                <div className="space-y-2">
+                  <Label>Platform</Label>
+                  <Tabs value={platformFilter} onValueChange={setPlatformFilter}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="all">Semua</TabsTrigger>
+                      <TabsTrigger value="shopee">Shopee</TabsTrigger>
+                      <TabsTrigger value="tiktok">TikTok</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Tabs value={accountStatusFilter} onValueChange={setAccountStatusFilter}>
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="all">Semua</TabsTrigger>
+                      <TabsTrigger value="active">Aktif</TabsTrigger>
+                      <TabsTrigger value="banned_temporary">Ban Sementara</TabsTrigger>
+                      <TabsTrigger value="banned_permanent">Ban Permanen</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button
+                    variant={viewMode === "table" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewMode("table")}
+                  >
+                    <List className="h-4 w-4 mr-2" />
+                    Tabel
+                  </Button>
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <Grid className="h-4 w-4 mr-2" />
+                    Grid
+                  </Button>
+                </div>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center items-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="overflow-x-auto -mx-6 sm:mx-0">
-                <div className="inline-block min-w-full align-middle">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="whitespace-nowrap">Platform</TableHead>
-                        <TableHead className="whitespace-nowrap">Username</TableHead>
-                        <TableHead className="whitespace-nowrap">Email</TableHead>
-                        <TableHead className="whitespace-nowrap">No HP</TableHead>
-                        <TableHead className="whitespace-nowrap">Grup</TableHead>
-                        <TableHead className="whitespace-nowrap">Status Akun</TableHead>
-                        <TableHead className="whitespace-nowrap">Status Data</TableHead>
-                        {canManageAccounts && <TableHead className="whitespace-nowrap">Actions</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAccounts.length === 0 && (
+          </CardContent>
+        </Card>
+
+        {/* Accounts Display */}
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            {viewMode === "table" ? (
+              <Card className="shadow-lg overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <CardTitle>Daftar Akun</CardTitle>
+                      <CardDescription>
+                        Menampilkan {filteredAccounts.length} dari {totalCount} akun
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={canManageAccounts ? 8 : 7} className="text-center h-24">
-                            {searchTerm ? "Akun tidak ditemukan." : "Belum ada data akun."}
-                          </TableCell>
+                          <TableHead className="whitespace-nowrap">Platform</TableHead>
+                          <TableHead className="whitespace-nowrap">Username</TableHead>
+                          <TableHead className="whitespace-nowrap">Email</TableHead>
+                          <TableHead className="whitespace-nowrap">No HP</TableHead>
+                          <TableHead className="whitespace-nowrap">Grup</TableHead>
+                          <TableHead className="whitespace-nowrap">Status Akun</TableHead>
+                          <TableHead className="whitespace-nowrap">Status Data</TableHead>
+                          {canManageAccounts && <TableHead className="whitespace-nowrap">Actions</TableHead>}
                         </TableRow>
-                      )}
-                      {filteredAccounts.map((account) => (
-                        <TableRow key={account.id}>
-                          <TableCell className="whitespace-nowrap">
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAccounts.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={canManageAccounts ? 8 : 7} className="text-center h-24">
+                              {searchTerm || platformFilter !== "all" || accountStatusFilter !== "all"
+                                ? "Akun tidak ditemukan."
+                                : "Belum ada data akun."}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {filteredAccounts.map((account) => (
+                          <TableRow key={account.id} className="hover:bg-muted/50 transition-colors">
+                            <TableCell className="whitespace-nowrap">
+                              <Badge
+                                variant={account.platform === "shopee" ? "default" : "secondary"}
+                                className={cn(
+                                  account.platform === "shopee"
+                                    ? "bg-[#FF6600] hover:bg-[#FF6600]/90"
+                                    : "bg-black hover:bg-black/90 text-white"
+                                )}
+                              >
+                                {prettyPlatform(account.platform)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback>
+                                    {account.username.substring(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">{account.username}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <span className="truncate max-w-[200px]">{account.email}</span>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{account.phone || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {account.groups ? (
+                                <Badge variant="outline" className="px-2 py-1 rounded-full">
+                                  {account.groups.name}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">N/A</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{renderAccountStatus(account.account_status)}</TableCell>
+                            <TableCell className="whitespace-nowrap">{renderDataStatus(account.data_status)}</TableCell>
+                            {canManageAccounts && (
+                              <TableCell className="whitespace-nowrap">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleEditClick(account)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit Akun
+                                    </DropdownMenuItem>
+                                    {canDelete && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-destructive"
+                                          onClick={() => handleDeleteClick(account)}
+                                        >
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Hapus Akun
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+                {filteredAccounts.length > 0 && (
+                  <div className="p-4 border-t">
+                    {renderPagination()}
+                  </div>
+                )}
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAccounts.map((account) => (
+                  <Card key={account.id} className="overflow-hidden hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
                             <Badge
-                              variant={
-                                account.platform === "shopee" ? "default" : "secondary"
-                              }
+                              variant={account.platform === "shopee" ? "default" : "secondary"}
                               className={cn(
-                                "px-3 py-1 rounded-full text-sm font-semibold",
                                 account.platform === "shopee"
-                                  ? "bg-[#FF6600] hover:bg-[#FF6600]/90 text-white"
-                                  : "bg-black text-white"
+                                  ? "bg-[#FF6600] hover:bg-[#FF6600]/90"
+                                  : "bg-black hover:bg-black/90 text-white"
                               )}
                             >
                               {prettyPlatform(account.platform)}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <UserCircle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                              <span className="truncate max-w-[150px]">{account.username}</span>
+                            <div className="text-sm text-muted-foreground">
+                              {account.created_at ? new Date(account.created_at).toLocaleDateString() : "-"}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <span className="truncate max-w-[200px] inline-block">{account.email}</span>
-                          </TableCell>
-                          <TableCell className="text-sm whitespace-nowrap">{account.phone || "-"}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {account.groups ? (
-                              <Badge variant="outline" className="px-2 py-1 rounded-full">
-                                {account.groups.name}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">N/A</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{renderAccountStatus(account.account_status)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{renderDataStatus(account.data_status)}</TableCell>
-                          {canManageAccounts && (
-                            <TableCell className="whitespace-nowrap">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditClick(account)}>
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Edit Akun
+                          </div>
+                          <CardTitle className="text-xl">{account.username}</CardTitle>
+                          <CardDescription className="line-clamp-2">{account.email}</CardDescription>
+                        </div>
+                        {canManageAccounts && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditClick(account)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit Akun
+                              </DropdownMenuItem>
+                              {canDelete && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => handleDeleteClick(account)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Hapus Akun
                                   </DropdownMenuItem>
-                                  {canDelete && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive"
-                                        onClick={() => handleDeleteClick(account)}
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Hapus Akun
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Status Akun:</span>
+                          {renderAccountStatus(account.account_status)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Status Data:</span>
+                          {renderDataStatus(account.data_status)}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-sm text-muted-foreground">No. HP</span>
+                          <p className="font-medium">{account.phone || "-"}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Grup</span>
+                          <p className="font-medium">{account.groups?.name || "-"}</p>
+                        </div>
+                      </div>
+                      
+                      <Button asChild className="w-full mt-2">
+                        <div onClick={() => handleEditClick(account)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit Akun
+                        </div>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </>
+        )}
+
+        {/* Empty State */}
+        {!loading && filteredAccounts.length === 0 && (
+          <div className="text-center py-8">
+            <UserCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">Tidak ada akun ditemukan</h3>
+            <p className="text-muted-foreground">
+              {searchTerm || platformFilter !== "all" || accountStatusFilter !== "all"
+                ? "Coba ubah filter atau kata kunci pencarian"
+                : "Belum ada data akun. Tambahkan akun baru untuk memulai."}
+            </p>
+            {!searchTerm && platformFilter === "all" && accountStatusFilter === "all" && canManageAccounts && (
+              <Button className="mt-4" onClick={() => setDialogs({ ...dialogs, add: true })}>
+                <Plus className="h-4 w-4 mr-2" />
+                Tambah Akun Baru
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Dialogs */}
       {canManageAccounts && (
-        <AddAccountDialog
-          open={dialogs.add}
-          onOpenChange={(open) => setDialogs({ ...dialogs, add: open })}
-          onSuccess={handleSuccess}
-        />
-      )}
-
-      {canManageAccounts && dialogs.edit && (
-        <EditAccountDialog
-          open={!!dialogs.edit}
-          onOpenChange={(open) => setDialogs({ ...dialogs, edit: open ? dialogs.edit : null })}
-          onSuccess={handleSuccess}
-          account={dialogs.edit}
-        />
-      )}
-
-      {canDelete && dialogs.delete && (
-        <DeleteAccountAlert
-          open={!!dialogs.delete}
-          onOpenChange={(open) => setDialogs({ ...dialogs, delete: open ? dialogs.delete : null })}
-          onSuccess={handleSuccess}
-          account={dialogs.delete}
-        />
-      )}
-
-      {canManageAccounts && (
-        <BulkImportDialog
-          open={dialogs.import}
-          onOpenChange={(open) => setDialogs({ ...dialogs, import: open })}
-          onSuccess={handleSuccess}
-        />
+        <>
+          <AddAccountDialog
+            open={dialogs.add}
+            onOpenChange={(open) => setDialogs({ ...dialogs, add: open })}
+            onSuccess={handleSuccess}
+          />
+          {dialogs.edit && (
+            <EditAccountDialog
+              open={!!dialogs.edit}
+              onOpenChange={(open) => setDialogs({ ...dialogs, edit: open ? dialogs.edit : null })}
+              onSuccess={handleSuccess}
+              account={dialogs.edit}
+            />
+          )}
+          {canDelete && dialogs.delete && (
+            <DeleteAccountAlert
+              open={!!dialogs.delete}
+              onOpenChange={(open) => setDialogs({ ...dialogs, delete: open ? dialogs.delete : null })}
+              onSuccess={handleSuccess}
+              account={dialogs.delete}
+            />
+          )}
+          <BulkImportDialog
+            open={dialogs.import}
+            onOpenChange={(open) => setDialogs({ ...dialogs, import: open })}
+            onSuccess={handleSuccess}
+          />
+        </>
       )}
     </MainLayout>
   );
