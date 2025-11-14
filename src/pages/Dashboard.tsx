@@ -1,6 +1,4 @@
-// src/pages/Dashboard.tsx
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -79,7 +77,6 @@ type SalesTrendData = {
 };
 type Group = { id: string; name: string };
 
-// HELPER LOGIC KPI
 const calculateTotalKpi = (
   sales: number,
   sTarget: number,
@@ -91,9 +88,7 @@ const calculateTotalKpi = (
   const sales_pct = sTarget > 0 ? (sales / sTarget) * 100 : 0;
   const commission_pct = cTarget > 0 ? (comm / cTarget) * 100 : 0;
   const attendance_pct = aTarget > 0 ? (attend / aTarget) * 100 : 0;
-
   const total_kpi = sales_pct * 0.5 + commission_pct * 0.3 + attendance_pct * 0.2;
-
   return Math.min(total_kpi, 100);
 };
 
@@ -138,6 +133,7 @@ const Dashboard = () => {
   const { profile, employee } = useAuth();
   const navigate = useNavigate();
   const isStaff = profile?.role === "staff";
+  const subscriptionRef = useRef<any>(null);
 
   // States Global
   const [filterDateStart, setFilterDateStart] = useState(
@@ -153,7 +149,6 @@ const Dashboard = () => {
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [rankingData, setRankingData] = useState<EmployeePerformance[]>([]);
-
   const [myKpi, setMyKpi] = useState<EmployeePerformance | null>(null);
 
   const [commissionData, setCommissionData] = useState<CommissionBreakdown[]>([]);
@@ -179,16 +174,14 @@ const Dashboard = () => {
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(value);
-    
-    
+
   const handleFilterSubmit = () => {
     const initialGroupId = isStaff ? "all" : filterGroup;
-    fetchData(filterDateStart, filterDateEnd, initialGroupId);
+    fetchAllData(filterDateStart, filterDateEnd, initialGroupId);
   };
 
-
-  // FETCH DATA UTAMA
-  const fetchData = useCallback(
+  // ============ OPTIMIZATION #1: FETCH SEMUA DATA DALAM 1 CALL ============
+  const fetchAllData = useCallback(
     async (startDate: string, endDate: string, groupId: string) => {
       setLoadingRanking(true);
       setLoadingCharts(true);
@@ -202,100 +195,98 @@ const Dashboard = () => {
           return;
         }
 
-        if (!isStaff) {
-          await Promise.all([
-            fetchRankingData(startDate, endDate, groupId),
-            fetchChartData(startDate, endDate, groupId),
-          ]);
-        } else {
-          // Staff hanya perlu fetch ranking (untuk dirinya dan semua staff)
-          await fetchRankingData(startDate, endDate, "all");
-        }
-      } catch (err: any) {
-        console.error("Error fetching data:", err);
-        setError("Gagal memuat data dashboard");
-        toast.error("Gagal memuat data dashboard");
-      }
-    },
-    [isStaff]
-  );
-
-  // FETCH RANKING DATA (Updated untuk real-time)
-  const fetchRankingData = useCallback(
-    async (startDate: string, endDate: string, groupId: string) => {
-      setLoadingRanking(true);
-      try {
-        // FIX #2-REFINED: Tentukan Awal Bulan Pelaporan dan Awal Bulan Sebelumnya
-        // Logika ini mencari target dari awal bulan lalu HINGGA awal bulan ini untuk memastikan data target terbaru terambil.
         const endMonth = parseISO(endDate);
-        const currentMonthStart = format(startOfMonth(endMonth), "yyyy-MM-dd"); 
+        const currentMonthStart = format(startOfMonth(endMonth), "yyyy-MM-dd");
         const previousMonthStart = format(subMonths(startOfMonth(endMonth), 1), "yyyy-MM-dd");
 
-        let query = supabase
+        // OPTIMIZATION #2: Build queries dengan kondisi yang tepat sebelum Promise.all
+        let kpiQuery = supabase
           .from("kpi_targets")
           .select(
             `
-                sales_target,
-                commission_target,
-                attendance_target,
-                actual_sales,
-                actual_commission,
-                actual_attendance,
-                employees!inner (
-                    id,
-                    profiles!inner ( full_name, role ),
-                    groups ( name, id )
-                ),
-                target_month
-            `
+            sales_target,
+            commission_target,
+            attendance_target,
+            actual_sales,
+            actual_commission,
+            actual_attendance,
+            employees!inner (
+              id,
+              profiles!inner ( full_name, role ),
+              groups ( name, id )
+            ),
+            target_month
+          `
           )
-          .gte("target_month", previousMonthStart) 
-          .lte("target_month", currentMonthStart) 
+          .gte("target_month", previousMonthStart)
+          .lte("target_month", currentMonthStart)
           .order("target_month", { ascending: false });
 
         if (isStaff) {
-          query = query.eq("employees.profiles.role", "staff");
+          kpiQuery = kpiQuery.eq("employees.profiles.role", "staff");
         } else if (groupId !== "all") {
-          query = query.eq("employees.group_id", groupId);
+          kpiQuery = kpiQuery.eq("employees.group_id", groupId);
         }
 
-        const { data: kpiResults, error: kpiError } = await query;
-        if (kpiError) {
-          console.error("KPI Query Error:", kpiError);
-          throw kpiError;
+        let dailyReportsQuery = supabase
+          .from("daily_reports")
+          .select("employee_id, total_sales, report_date, device_id, devices!inner(group_id, groups(name))")
+          .gte("report_date", startDate)
+          .lte("report_date", endDate);
+
+        if (!isStaff && groupId !== "all") {
+          dailyReportsQuery = dailyReportsQuery.eq("devices.group_id", groupId);
         }
 
-        const rawData = (kpiResults as any[]) || [];
-        
-        if (rawData.length === 0) {
-          console.warn("No KPI data found for the selected period");
-          setRankingData([]);
-          if (isStaff) setMyKpi(null);
-          setLoadingRanking(false);
-          return;
+        let commissionsQuery = supabase
+          .from("commissions")
+          .select("gross_commission, net_commission, paid_commission, period_start, accounts!inner(id, group_id)")
+          .gte("period_start", startDate)
+          .lte("period_start", endDate);
+
+        if (!isStaff && groupId !== "all") {
+          commissionsQuery = commissionsQuery.eq("accounts.group_id", groupId);
         }
 
+        let accountsQuery = supabase.from("accounts").select("platform, group_id");
+
+        if (!isStaff && groupId !== "all") {
+          accountsQuery = accountsQuery.eq("group_id", groupId);
+        }
+
+        // OPTIMIZATION #3: Execute semua queries secara parallel
+        const [
+          { data: kpiData, error: kpiError },
+          { data: dailyReportsData, error: dailyReportsError },
+          { data: commissionsData, error: commissionsError },
+          { data: accountsData, error: accountsError },
+        ] = await Promise.all([
+          kpiQuery,
+          dailyReportsQuery,
+          commissionsQuery,
+          accountsQuery,
+        ]);
+
+        if (kpiError) throw kpiError;
+        if (dailyReportsError) throw dailyReportsError;
+        if (commissionsError) throw commissionsError;
+        if (accountsError) throw accountsError;
+
+        // ============ PROCESS: KPI & RANKING DATA ============
+        const rawData = (kpiData as any[]) || [];
         const latestKpiMap = new Map<string, EmployeePerformance>();
         const currentEmployeeId = employee?.id;
         let foundMyKpi: EmployeePerformance | null = null;
 
-        // Fetch daily_reports untuk omset real-time
-        let dailyReportsOmset = new Map<string, number>();
+        // Build omset map dari daily reports (OPTIMIZATION: single pass)
+        const dailyReportsOmset = new Map<string, number>();
+        (dailyReportsData || []).forEach((report: any) => {
+          const empId = report.employee_id;
+          const current = dailyReportsOmset.get(empId) || 0;
+          dailyReportsOmset.set(empId, current + (report.total_sales || 0));
+        });
 
-        const { data: dailyData, error: dailyError } = await supabase
-          .from("daily_reports")
-          .select("employee_id, total_sales, report_date")
-          .gte("report_date", startDate)
-          .lte("report_date", endDate);
-
-        if (!dailyError && dailyData) {
-          (dailyData as any[]).forEach((report) => {
-            const empId = report.employee_id;
-            const current = dailyReportsOmset.get(empId) || 0;
-            dailyReportsOmset.set(empId, current + (report.total_sales || 0));
-          });
-        }
-
+        // Process ranking data
         rawData.forEach((item) => {
           const employeeId = item.employees?.id;
           if (!employeeId) return;
@@ -327,7 +318,6 @@ const Dashboard = () => {
           };
 
           if (!latestKpiMap.has(employeeId)) {
-            // Karena diurutkan descending, item pertama adalah yang paling baru
             latestKpiMap.set(employeeId, performanceRecord);
           }
 
@@ -340,80 +330,30 @@ const Dashboard = () => {
         uniqueData.sort((a, b) => b.kpi - a.kpi);
         setRankingData(uniqueData);
         if (isStaff) setMyKpi(foundMyKpi);
-      } catch (error: any) {
-        console.error("Error fetching ranking data:", error);
-        toast.error("Gagal memuat data Ranking Dashboard.");
-        setRankingData([]);
-      } finally {
-        setLoadingRanking(false);
-      }
-    },
-    [employee?.id, isStaff]
-  );
 
-  // FETCH CHART DATA (Updated dengan daily_reports)
-  const fetchChartData = useCallback(
-    async (startDate: string, endDate: string, groupId: string) => {
-      setLoadingCharts(true);
+        // ============ PROCESS: COMMISSION DATA ============
+        const gross = (commissionsData || []).reduce(
+          (acc, c) => acc + (Number(c.gross_commission) || 0),
+          0
+        );
+        const net = (commissionsData || []).reduce(
+          (acc, c) => acc + (Number(c.net_commission) || 0),
+          0
+        );
+        const paid = (commissionsData || []).reduce(
+          (acc, c) => acc + (Number(c.paid_commission) || 0),
+          0
+        );
 
-      try {
-        console.log("Fetching chart data:", { startDate, endDate, groupId });
-
-        // 1. Fetch Commission Breakdown (PERBAIKAN: gunakan period_start bukan payment_date)
-        let commsQuery = supabase
-          .from("commissions")
-          .select("gross_commission, net_commission, paid_commission, accounts!inner(id, group_id)")
-          .gte("period_start", startDate)
-          .lte("period_start", endDate);
-
-        if (groupId !== "all") {
-          commsQuery = commsQuery.eq("accounts.group_id", groupId);
-        }
-
-        const { data: commsData, error: commsError } = await commsQuery;
-        
-        if (commsError) {
-          console.error("Error fetching commissions:", commsError);
-          throw commsError;
-        }
-
-        console.log("Commissions data:", commsData);
-
-        const gross = (commsData || []).reduce((acc, c) => acc + (Number(c.gross_commission) || 0), 0);
-        const net = (commsData || []).reduce((acc, c) => acc + (Number(c.net_commission) || 0), 0);
-        const paid = (commsData || []).reduce((acc, c) => acc + (Number(c.paid_commission) || 0), 0);
-
-        console.log("Commission totals:", { gross, net, paid });
-
-        // Pastikan data selalu di-set, meskipun nilainya 0
-        const commissionBreakdown = [
+        setCommissionData([
           { name: "Kotor", value: gross, color: CHART_COLORS.blue },
           { name: "Bersih", value: net, color: CHART_COLORS.green },
           { name: "Cair", value: paid, color: CHART_COLORS.yellow },
-        ];
+        ]);
 
-        console.log("Setting commission data:", commissionBreakdown);
-        setCommissionData(commissionBreakdown);
-
-        // 2. Fetch Group Performance dari daily_reports (Real-time!)
-        let dailyGroupQuery = supabase
-          .from("daily_reports")
-          .select("total_sales, device_id, devices!inner(group_id, groups(name))")
-          .gte("report_date", startDate)
-          .lte("report_date", endDate);
-
-        if (groupId !== "all") {
-          dailyGroupQuery = dailyGroupQuery.eq("devices.group_id", groupId);
-        }
-
-        const { data: dailyGroupData, error: dailyGroupError } = await dailyGroupQuery;
-        if (dailyGroupError) {
-          console.error("Error fetching daily group data:", dailyGroupError);
-          throw dailyGroupError;
-        }
-
+        // ============ PROCESS: GROUP PERFORMANCE ============
         const groupOmsetMap = new Map<string, number>();
-        (dailyGroupData || []).forEach((item) => {
+        (dailyReportsData || []).forEach((item: any) => {
           const groupName = item.devices?.groups?.name || "Tanpa Grup";
           const currentOmset = groupOmsetMap.get(groupName) || 0;
           groupOmsetMap.set(groupName, currentOmset + (Number(item.total_sales) || 0));
@@ -424,26 +364,16 @@ const Dashboard = () => {
           .sort((a, b) => b.omset - a.omset)
           .slice(0, 5);
 
-        setGroupData(groupDataArray.length > 0 ? groupDataArray : [{ name: "Tidak ada data", omset: 0 }]);
+        setGroupData(
+          groupDataArray.length > 0
+            ? groupDataArray
+            : [{ name: "Tidak ada data", omset: 0 }]
+        );
 
-        // 3. Fetch Account Platform Breakdown
-        let accQuery = supabase
-          .from("accounts")
-          .select("platform, group_id");
-
-        if (groupId !== "all") {
-          accQuery = accQuery.eq("group_id", groupId);
-        }
-
-        const { data: accData, error: accError } = await accQuery;
-        if (accError) {
-          console.error("Error fetching accounts:", accError);
-          throw accError;
-        }
-
+        // ============ PROCESS: ACCOUNTS DATA ============
         let shopeeCount = 0;
         let tiktokCount = 0;
-        (accData || []).forEach((acc) => {
+        (accountsData || []).forEach((acc: any) => {
           if (acc.platform === "shopee") shopeeCount++;
           if (acc.platform === "tiktok") tiktokCount++;
         });
@@ -453,47 +383,7 @@ const Dashboard = () => {
           { name: "TikTok", value: tiktokCount, color: CHART_COLORS.tiktok },
         ]);
 
-        // 4. FETCH SALES TREND (Updated dengan daily_reports!)
-        let salesQuery = supabase
-          .from("daily_reports")
-          .select("report_date, total_sales, devices!inner(group_id)")
-          .gte("report_date", startDate)
-          .lte("report_date", endDate);
-
-        if (groupId !== "all") {
-          salesQuery = salesQuery.eq("devices.group_id", groupId);
-        }
-
-        const { data: salesData, error: salesError } = await salesQuery;
-
-        if (salesError) {
-          console.error("Error fetching sales trend:", salesError);
-          throw salesError;
-        }
-
-        console.log("Sales data:", salesData);
-
-        // Fetch Commission Trend (PERBAIKAN: gunakan period_start untuk grouping)
-        let commissionTrendQuery = supabase
-          .from("commissions")
-          .select("period_start, paid_commission, accounts!inner(id, group_id)")
-          .gte("period_start", startDate)
-          .lte("period_start", endDate);
-
-        if (groupId !== "all") {
-          commissionTrendQuery = commissionTrendQuery.eq("accounts.group_id", groupId);
-        }
-
-        const { data: commissionTrendData, error: commissionTrendError } = await commissionTrendQuery;
-
-        if (commissionTrendError) {
-          console.error("Error fetching commission trend:", commissionTrendError);
-          throw commissionTrendError;
-        }
-
-        console.log("Commission trend data:", commissionTrendData);
-
-        // Process & Gabungkan Data
+        // ============ PROCESS: SALES TREND ============
         const trendMap = new Map<
           string,
           { date: string; sales: number; commission: number }
@@ -509,8 +399,8 @@ const Dashboard = () => {
           trendMap.set(dateKey, { date: dateLabel, sales: 0, commission: 0 });
         });
 
-        // Process sales data
-        (salesData || []).forEach((report) => {
+        // Add sales data
+        (dailyReportsData || []).forEach((report: any) => {
           const dateKey = report.report_date;
           if (trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
@@ -518,8 +408,8 @@ const Dashboard = () => {
           }
         });
 
-        // Process commission data - tampilkan pada tanggal period_start
-        (commissionTrendData || []).forEach((comm) => {
+        // Add commission data
+        (commissionsData || []).forEach((comm: any) => {
           const dateKey = comm.period_start;
           if (dateKey && trendMap.has(dateKey)) {
             const current = trendMap.get(dateKey)!;
@@ -528,23 +418,28 @@ const Dashboard = () => {
         });
 
         const finalTrendData = Array.from(trendMap.values());
-        console.log("Final trend data:", finalTrendData);
         setSalesTrendData(finalTrendData);
-      } catch (error: any) {
-        console.error("Error fetching chart data:", error);
-        toast.error("Gagal memuat data Charts Dashboard: " + (error.message || "Unknown error"));
-      } finally {
+
+        setLoadingRanking(false);
+        setLoadingCharts(false);
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError("Gagal memuat data dashboard");
+        toast.error("Gagal memuat data dashboard");
+        setLoadingRanking(false);
         setLoadingCharts(false);
       }
     },
-    []
+    [employee?.id, isStaff]
   );
 
-  // Fetch Groups
+  // OPTIMIZATION #4: Fetch Groups hanya sekali pada mount
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const { data, error } = await supabase.from("groups").select("id, name");
+        const { data, error } = await supabase
+          .from("groups")
+          .select("id, name");
         if (error) throw error;
         if (data) {
           setAvailableGroups(data);
@@ -559,17 +454,18 @@ const Dashboard = () => {
     }
   }, [isStaff]);
 
-  // FIX #1: Main useEffect hanya berjalan pada mount/user change
+  // Initial load
   useEffect(() => {
     if (profile && employee) {
-      // Panggil fungsi submit filter saat mount/login untuk memuat data awal
-      handleFilterSubmit(); 
+      handleFilterSubmit();
     }
-  }, [profile, employee, isStaff]); 
+  }, [profile, employee, isStaff]);
 
-  // FIX #3: Setup real-time subscription untuk daily_reports
+  // OPTIMIZATION #5: Debounced real-time subscription untuk menghindari refresh berlebihan
   useEffect(() => {
     if (!profile || !employee) return;
+
+    let refreshTimeout: NodeJS.Timeout;
 
     const subscription = supabase
       .channel("daily_reports_channel")
@@ -580,19 +476,24 @@ const Dashboard = () => {
           schema: "public",
           table: "daily_reports",
         },
-        (payload) => {
-          console.log("Daily reports updated, refreshing dashboard...", payload);
-          // Panggil handleFilterSubmit agar menggunakan state filter terbaru
-          handleFilterSubmit(); 
+        () => {
+          console.log("Daily reports updated");
+          // Debounce 2 detik untuk menghindari refresh terlalu sering
+          clearTimeout(refreshTimeout);
+          refreshTimeout = setTimeout(() => {
+            handleFilterSubmit();
+          }, 2000);
         }
       )
       .subscribe();
 
+    subscriptionRef.current = subscription;
+
     return () => {
-      subscription.unsubscribe();
+      clearTimeout(refreshTimeout);
+      if (subscription) subscription.unsubscribe();
     };
-    // Hapus filter states dari dependencies untuk mencegah re-subscribe berulang-ulang
-  }, [fetchData, profile, employee, isStaff]); 
+  }, [profile, employee, isStaff, handleFilterSubmit]);
 
   const filteredRankingData = rankingData.filter(
     (e) =>
@@ -663,7 +564,12 @@ const Dashboard = () => {
             <div className="space-y-1">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-semibold">Total KPI</span>
-                <span className={cn("text-xl font-bold", getKpiTextColor(myKpi.kpi))}>
+                <span
+                  className={cn(
+                    "text-xl font-bold",
+                    getKpiTextColor(myKpi.kpi)
+                  )}
+                >
                   {myKpi.kpi.toFixed(1)}%
                 </span>
               </div>
@@ -678,7 +584,6 @@ const Dashboard = () => {
     );
   };
 
-  // STAFF VIEW
   if (isStaff) {
     return (
       <MainLayout>
@@ -713,7 +618,9 @@ const Dashboard = () => {
                 </div>
               ) : filteredRankingData.length === 0 ? (
                 <div className="flex justify-center items-center h-64">
-                  <p className="text-muted-foreground">Tidak ada data ranking staff ditemukan.</p>
+                  <p className="text-muted-foreground">
+                    Tidak ada data ranking staff ditemukan.
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -782,7 +689,10 @@ const Dashboard = () => {
                             <div className="flex items-center gap-2">
                               <Progress
                                 value={item.kpi}
-                                className={cn("h-3 w-full", getKpiColor(item.kpi))}
+                                className={cn(
+                                  "h-3 w-full",
+                                  getKpiColor(item.kpi)
+                                )}
                               />
                               <span
                                 className={cn(
@@ -807,7 +717,6 @@ const Dashboard = () => {
     );
   }
 
-  // MANAGEMENT/ADMIN/VIEWER VIEW
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -821,7 +730,6 @@ const Dashboard = () => {
           </Card>
         )}
 
-        {/* FILTER GLOBAL */}
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4 items-end">
@@ -882,16 +790,13 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* KOMPONEN METRIK REAL TIME (FINANSIAL) */}
-        <DashboardStats 
+        <DashboardStats
           filterDateStart={filterDateStart}
           filterDateEnd={filterDateEnd}
           filterGroup={filterGroup}
         />
 
-        {/* Charts Row 1 */}
         <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
-          {/* Chart Tren Omset */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Tren Omset & Komisi Cair</CardTitle>
@@ -931,9 +836,7 @@ const Dashboard = () => {
                       }}
                       formatter={(value: number) => formatCurrencyForChart(value)}
                     />
-                    <Legend 
-                      wrapperStyle={{ color: "hsl(var(--foreground))" }}
-                    />
+                    <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
                     <Line
                       type="monotone"
                       dataKey="sales"
@@ -956,7 +859,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Chart Breakdown Komisi */}
           <Card>
             <CardHeader>
               <CardTitle>Breakdown Komisi (Filter)</CardTitle>
@@ -966,9 +868,12 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-[300px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : commissionData.length === 0 || commissionData.every(item => item.value === 0) ? (
+              ) : commissionData.length === 0 ||
+                commissionData.every((item) => item.value === 0) ? (
                 <div className="flex justify-center items-center h-[300px]">
-                  <p className="text-muted-foreground">Tidak ada data komisi untuk periode ini.</p>
+                  <p className="text-muted-foreground">
+                    Tidak ada data komisi untuk periode ini.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1015,9 +920,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Charts Row 2 & Ranking */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {/* Chart Performa Group */}
           <Card className="md:col-span-1">
             <CardHeader>
               <CardTitle>Performa Group (Top 5 Omset)</CardTitle>
@@ -1070,7 +973,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Chart Performa Akun */}
           <Card className="md:col-span-1">
             <CardHeader>
               <CardTitle>Breakdown Platform Akun</CardTitle>
@@ -1083,7 +985,8 @@ const Dashboard = () => {
                 <div className="flex justify-center items-center h-[300px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : accountData.length === 0 || (accountData[0]?.value === 0 && accountData[1]?.value === 0) ? (
+              ) : accountData.length === 0 ||
+                (accountData[0]?.value === 0 && accountData[1]?.value === 0) ? (
                 <div className="flex justify-center items-center h-[300px]">
                   <p className="text-muted-foreground">Tidak ada data akun.</p>
                 </div>
@@ -1106,25 +1009,22 @@ const Dashboard = () => {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "var(--radius)",
                         color: "hsl(var(--foreground))",
                       }}
-                      formatter={(value) => `${value} Akun`} 
+                      formatter={(value) => `${value} Akun`}
                     />
-                    <Legend 
-                      wrapperStyle={{ color: "hsl(var(--foreground))" }}
-                    />
+                    <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
 
-          {/* Ranking Table */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle>Top Performers (Bulan Terakhir)</CardTitle>
@@ -1164,7 +1064,10 @@ const Dashboard = () => {
                         <div className="flex items-center gap-2 mt-1">
                           <Progress
                             value={employee.kpi}
-                            className={cn("flex-1 h-1.5", getKpiColor(employee.kpi))}
+                            className={cn(
+                              "flex-1 h-1.5",
+                              getKpiColor(employee.kpi)
+                            )}
                           />
                           <span
                             className={cn(
