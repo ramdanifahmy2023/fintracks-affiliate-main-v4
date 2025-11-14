@@ -1,5 +1,3 @@
-// File: ramdanifahmy2023/affstudiofahmyv2-main/affstudiofahmyv2-main-0cf4e2de727adf0e0171efcb1d3ba596c76c8cce/src/pages/Asset.tsx
-
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +14,9 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Filter,
+  TrendingUp,
+  Package,
 } from "lucide-react";
 import {
   Table,
@@ -51,8 +52,7 @@ import { EditAssetDialog } from "@/components/Asset/EditAssetDialog";
 import { DeleteAssetAlert } from "@/components/Asset/DeleteAssetAlert"; 
 import { cn } from "@/lib/utils";
 import { useExport } from "@/hooks/useExport";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Pastikan Select diimpor
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Tipe data dari Supabase (Query lengkap untuk Edit)
 export type AssetData = {
@@ -274,111 +274,132 @@ const Assets = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Manajemen Aset</h1>
-            <p className="text-muted-foreground">
-              Kelola inventaris aset perusahaan.
-            </p>
+        {/* Header Section dengan Background Gradient */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Manajemen Aset</h1>
+              <p className="text-blue-100 mt-1">
+                Kelola inventaris aset perusahaan dengan mudah dan efisien.
+              </p>
+            </div>
+            {canManageAssets && (
+              <Button className="gap-2 w-full sm:w-auto bg-white text-blue-600 hover:bg-blue-50 shadow-md" onClick={() => setIsAddModalOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Tambah Aset
+              </Button>
+            )}
           </div>
-          {canManageAssets && (
-            <Button className="gap-2 w-full sm:w-auto" onClick={() => setIsAddModalOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Tambah Aset
-            </Button>
-          )}
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards dengan Desain yang Lebih Menarik */}
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-emerald-50">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
+                <div className="p-1.5 bg-green-500 rounded-md">
+                  <DollarSign className="h-4 w-4 text-white" />
+                </div>
                 Total Nilai Aset 
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-green-600">
                 {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(totalValue)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Nilai total semua aset perusahaan</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-indigo-50">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Archive className="h-4 w-4" />
+                <div className="p-1.5 bg-blue-500 rounded-md">
+                  <Package className="h-4 w-4 text-white" />
+                </div>
                 Jumlah Item Aset
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-blue-600">
                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : totalItems}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Total item inventaris yang terdaftar</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-purple-50 to-pink-50">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <PieIcon className="h-4 w-4" />
-                Breakdown Kategori
+                <div className="p-1.5 bg-purple-500 rounded-md">
+                  <TrendingUp className="h-4 w-4 text-white" />
+                </div>
+                Kategori Aset
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-purple-600">
                 {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : chartData.length}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Jumlah kategori yang terdaftar</p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Table */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                {/* ✅ FILTER KATEGORI BARU */}
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-full sm:w-40">
-                    <SelectValue placeholder="Semua Kategori" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Kategori</SelectItem>
-                    {availableCategories.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* --------------------------- */}
-                <div className="relative flex-1 w-full">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari nama aset..."
-                    className="pl-10 w-full"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Table dengan Desain yang Lebih Modern */}
+          <Card className="lg:col-span-2 shadow-md border-0">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Filter className="h-4 w-4" />
+                  Filter:
                 </div>
-                 {/* DROP DOWN MENU UNTUK EXPORT */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="gap-2" disabled={isExporting || filteredAssets.length === 0}>
-                          <Download className="h-4 w-4" />
-                          {isExporting ? 'Mengekspor...' : 'Export'}
-                      </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => exportAssets('pdf')} disabled={isExporting}>
-                          Export PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => exportAssets('csv')} disabled={isExporting}>
-                          Export CSV
-                      </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
+                  {/* ✅ FILTER KATEGORI BARU */}
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Semua Kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Kategori</SelectItem>
+                      {availableCategories.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* --------------------------- */}
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Cari nama aset..."
+                      className="pl-10 w-full border-slate-200 focus:border-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                   {/* DROP DOWN MENU UNTUK EXPORT */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="gap-2 bg-white hover:bg-slate-50 border-slate-200" disabled={isExporting || filteredAssets.length === 0}>
+                            <Download className="h-4 w-4" />
+                            {isExporting ? 'Mengekspor...' : 'Export'}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => exportAssets('pdf')} disabled={isExporting}>
+                            Export PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportAssets('csv')} disabled={isExporting}>
+                            Export CSV
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {loading ? (
                 <div className="flex justify-center items-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -386,37 +407,40 @@ const Assets = () => {
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-slate-50">
                       <TableRow>
-                        <TableHead>Tanggal Beli</TableHead>
-                        <TableHead>Nama Aset</TableHead>
-                        <TableHead>Kategori</TableHead>
-                        <TableHead>Diberikan Kepada</TableHead>
-                        <TableHead>Kondisi</TableHead>
-                        <TableHead className="text-right">Total Harga</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
+                        <TableHead className="font-medium text-slate-700">Tanggal Beli</TableHead>
+                        <TableHead className="font-medium text-slate-700">Nama Aset</TableHead>
+                        <TableHead className="font-medium text-slate-700">Kategori</TableHead>
+                        <TableHead className="font-medium text-slate-700">Diberikan Kepada</TableHead>
+                        <TableHead className="font-medium text-slate-700">Kondisi</TableHead>
+                        <TableHead className="text-right font-medium text-slate-700">Total Harga</TableHead>
+                        <TableHead className="text-center font-medium text-slate-700">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredAssets.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center h-24">
+                          <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
                             {searchTerm || categoryFilter !== 'all' ? "Aset tidak ditemukan." : "Belum ada data aset."}
                           </TableCell>
                         </TableRow>
                       ) : null}
                       {filteredAssets.map((asset) => (
-                        <TableRow key={asset.id}>
-                          <TableCell>{formatDate(asset.purchase_date)}</TableCell>
+                        <TableRow key={asset.id} className="hover:bg-slate-50 transition-colors">
+                          <TableCell className="font-medium">{formatDate(asset.purchase_date)}</TableCell>
                           <TableCell className="font-medium">{asset.name}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">{asset.category}</Badge>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{asset.category}</Badge>
                           </TableCell>
                           <TableCell>{(asset as any).assigned_to_name || '-'}</TableCell>
                           <TableCell>
                             <Badge
                               variant={asset.condition === "Baru" ? "default" : (asset.condition === "Bekas" ? "secondary" : "outline")}
-                              className={cn(asset.condition === "Baru" ? "bg-green-600 hover:bg-green-600/90" : "")}
+                              className={cn(
+                                asset.condition === "Baru" ? "bg-green-600 hover:bg-green-600/90" : "",
+                                asset.condition === "Bekas" ? "bg-amber-100 text-amber-800 hover:bg-amber-100/80" : ""
+                              )}
                             >
                               {asset.condition || "-"}
                             </Badge>
@@ -426,17 +450,17 @@ const Assets = () => {
                             {canManageAssets ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
+                                  <Button variant="ghost" size="icon" className="hover:bg-slate-100">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditClick(asset)}>
+                                <DropdownMenuContent align="end" className="border-slate-200">
+                                  <DropdownMenuItem onClick={() => handleEditClick(asset)} className="hover:bg-blue-50 focus:bg-blue-50">
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    className="text-destructive"
+                                    className="text-destructive hover:bg-red-50 focus:bg-red-50"
                                     onClick={() => handleDeleteClick(asset)}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -457,41 +481,51 @@ const Assets = () => {
             </CardContent>
           </Card>
           
-          {/* Pie Chart */}
-          <Card className="lg:col-span-1">
-             <CardHeader>
-               <CardTitle>Breakdown Aset by Nilai (Rp)</CardTitle> 
-             </CardHeader>
-             <CardContent>
-               <ResponsiveContainer width="100%" height={300}>
-                 <PieChart>
-                   <Pie
-                     data={chartData}
-                     cx="50%"
-                     cy="50%"
-                     labelLine={false}
-                     label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                     outerRadius={100}
-                     fill="#8884d8"
-                     dataKey="value"
-                   >
-                     {chartData.map((_entry, index) => (
-                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                     ))}
-                   </Pie>
-                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                    }}
-                    formatter={(value: number) => `${formatCurrency(value)}`} // Menampilkan nilai Rupiah
-                  />
-                   <Legend />
-                 </PieChart>
-               </ResponsiveContainer>
-             </CardContent>
-           </Card>
+          {/* Pie Chart dengan Desain yang Lebih Menarik */}
+          <Card className="shadow-md border-0">
+            <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+              <CardTitle className="flex items-center gap-2">
+                <PieIcon className="h-5 w-5 text-purple-600" />
+                Breakdown Aset by Nilai (Rp)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {chartData.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "var(--radius)",
+                      }}
+                      formatter={(value: number) => `${formatCurrency(value)}`} // Menampilkan nilai Rupiah
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <PieIcon className="h-12 w-12 mb-2 text-slate-300" />
+                  <p>Belum ada data untuk ditampilkan</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
       

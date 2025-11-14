@@ -1,5 +1,3 @@
-// File: ramdanifahmy2023/affstudiofahmyv2-main/affstudiofahmyv2-main-0cf4e2de727adf0e0171efcb1d3ba596c76c8cce/src/pages/Attendance.tsx
-
 import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,14 +24,25 @@ import {
   Loader2,
   ArrowUpRight,
   ArrowDownLeft,
-  CalendarIcon, 
+  CalendarIcon,
+  Search,
+  Filter,
+  Clock,
+  Users,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, subDays, intervalToDuration } from "date-fns"; // Import intervalToDuration
+import { format, subDays, intervalToDuration } from "date-fns";
+import { id as indonesiaLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-
 
 // --- TIPE DATA BARU UNTUK MANAGEMENT VIEW ---
 interface AttendanceRecord {
@@ -66,6 +75,13 @@ const Attendance = () => {
     const [filterGroup, setFilterGroup] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     
+    // --- PAGINATION STATES ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const recordsPerPage = 20;
+    // ----------------------------
+    
     // --- HELPER UNTUK FORMAT WAKTU ---
     const formatTime = (isoString: string | null) => {
         if (!isoString) return '-';
@@ -74,7 +90,7 @@ const Attendance = () => {
     }
     const formatDateOnly = (dateString: string) => {
         if (!dateString) return '-';
-        return format(new Date(dateString.includes('T') ? dateString : `${dateString}T00:00:00`), 'dd MMM yyyy');
+        return format(new Date(dateString.includes('T') ? dateString : `${dateString}T00:00:00`), 'dd MMM yyyy', { locale: indonesiaLocale });
     }
     // --- HELPER BARU: HITUNG DURASI ---
     const calculateDuration = (checkIn: string | null, checkOut: string | null) => {
@@ -127,9 +143,13 @@ const Attendance = () => {
     
     
     // --- LOGIC FETCHING DATA KEHADIRAN (Management View) ---
-    const fetchAttendanceData = useCallback(async (startDate: string, endDate: string, groupId: string, search: string) => {
+    const fetchAttendanceData = useCallback(async (startDate: string, endDate: string, groupId: string, search: string, page: number = 1) => {
         setLoadingRecords(true);
         try {
+            // Hitung offset berdasarkan halaman saat ini
+            const offset = (page - 1) * recordsPerPage;
+            
+            // Query untuk mendapatkan data dengan pagination
             let query = supabase
                 .from('attendance')
                 .select(`
@@ -143,27 +163,27 @@ const Attendance = () => {
                         profiles!inner(full_name, role),
                         groups(name)
                     )
-                `)
+                `, { count: 'exact' }) // Tambahkan count untuk pagination
                 .gte('attendance_date', startDate)
                 .lte('attendance_date', endDate)
-                .order('attendance_date', { ascending: false });
-
-            // 1. Filter Wajib: Tampilkan HANYA Staff
-            query = query.eq('employees.profiles.role', 'staff');
+                .eq('employees.profiles.role', 'staff')
+                .order('attendance_date', { ascending: false })
+                .range(offset, offset + recordsPerPage - 1);
             
-            // 2. Filter Group (jika Leader/Admin ingin membatasi view)
             if (groupId !== 'all') {
-                 // Diasumsikan group_id dapat difilter melalui join employees
-                 query = query.eq('employees.group_id', groupId); 
+                query = query.eq('employees.group_id', groupId);
             }
             
-            // 3. Filter Search Term (Employee Name)
             if (search.trim() !== '') {
-                 query = query.ilike('employees.profiles.full_name', `%${search.trim()}%`);
+                query = query.ilike('employees.profiles.full_name', `%${search.trim()}%`);
             }
             
-            const { data, error } = await query;
+            const { data, error, count } = await query;
             if (error) throw error;
+            
+            // Update total records dan total pages
+            setTotalRecords(count || 0);
+            setTotalPages(Math.ceil((count || 0) / recordsPerPage));
             
             const mappedRecords: AttendanceRecord[] = (data as any[]).map(record => ({
                 id: record.id,
@@ -200,9 +220,18 @@ const Attendance = () => {
     // --- Fetch Data on Filter Change (Management) ---
     useEffect(() => {
         if (canManage) {
-            fetchAttendanceData(filterDateStart, filterDateEnd, filterGroup, searchTerm);
+            // Reset ke halaman 1 saat filter berubah
+            setCurrentPage(1);
+            fetchAttendanceData(filterDateStart, filterDateEnd, filterGroup, searchTerm, 1);
         }
     }, [canManage, fetchAttendanceData, filterDateStart, filterDateEnd, filterGroup, searchTerm]);
+
+    // Fetch data saat halaman berubah
+    useEffect(() => {
+        if (canManage) {
+            fetchAttendanceData(filterDateStart, filterDateEnd, filterGroup, searchTerm, currentPage);
+        }
+    }, [canManage, currentPage, fetchAttendanceData, filterDateStart, filterDateEnd, filterGroup, searchTerm]);
 
     // Initial fetch for staff status
     useEffect(() => {
@@ -279,81 +308,153 @@ const Attendance = () => {
         }
     }
 
+    // --- PAGINATION HANDLERS ---
+    const goToPage = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
+    const goToPreviousPage = () => {
+        goToPage(currentPage - 1);
+    };
+
+    const goToNextPage = () => {
+        goToPage(currentPage + 1);
+    };
+
+    const goToFirstPage = () => {
+        goToPage(1);
+    };
+
+    const goToLastPage = () => {
+        goToPage(totalPages);
+    };
+    // -------------------------
 
     // --- RENDERING COMPONENTS ---
 
     const renderStaffView = () => (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold">Absensi Harian Anda</h1>
-            <Card className="text-center p-8 shadow-lg">
-                <CardTitle className="mb-4">Status Hari Ini</CardTitle>
-                <CardDescription>Absen in dan out sangat krusial untuk perhitungan KPI.</CardDescription>
-                {loadingRecords ? (
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mt-6" />
-                ) : (
-                    <>
-                        <p className={cn("text-xl font-semibold mb-6 mt-6", 
-                             currentStatus === 'clockedIn' ? 'text-success' : 'text-destructive'
-                        )}>
-                            {currentStatus === 'clockedIn' ? 'ANDA SUDAH CHECK-IN' : 'ANDA BELUM CHECK-IN'}
-                        </p>
-                        
-                        <div className="flex justify-center gap-4">
-                            <Button 
-                                size="lg" 
-                                className="gap-2 px-8 py-6 text-lg"
-                                onClick={() => handleAction('checkIn')}
-                                disabled={currentStatus === 'clockedIn' || loadingRecords}
-                            >
-                                <ArrowUpRight className="h-6 w-6" />
-                                Check-in
-                            </Button>
-                            <Button 
-                                size="lg" 
-                                variant="outline" 
-                                className="gap-2 px-8 py-6 text-lg"
-                                onClick={() => handleAction('checkOut')}
-                                disabled={currentStatus === 'clockedOut' || loadingRecords}
-                            >
-                                <ArrowDownLeft className="h-6 w-6" />
-                                Check-out
-                            </Button>
-                        </div>
-                    </>
-                )}
+            {/* Header Section dengan Background Gradient */}
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+                <h1 className="text-3xl font-bold tracking-tight">Absensi Harian Anda</h1>
+                <p className="text-blue-100 mt-1">Absen in dan out sangat krusial untuk perhitungan KPI.</p>
+            </div>
+            
+            <Card className="text-center p-8 shadow-md border-0 overflow-hidden">
+                <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center justify-center gap-2">
+                        <Clock className="h-5 w-5" />
+                        Status Hari Ini
+                    </CardTitle>
+                    <CardDescription>Absen in dan out sangat krusial untuk perhitungan KPI.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loadingRecords ? (
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mt-6" />
+                    ) : (
+                        <>
+                            <div className={cn(
+                                "inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-6 mt-6", 
+                                currentStatus === 'clockedIn' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            )}>
+                                {currentStatus === 'clockedIn' ? (
+                                    <>
+                                        <CheckCircle className="h-4 w-4" />
+                                        ANDA SUDAH CHECK-IN
+                                    </>
+                                ) : (
+                                    <>
+                                        <XCircle className="h-4 w-4" />
+                                        ANDA BELUM CHECK-IN
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="flex justify-center gap-4">
+                                <Button 
+                                    size="lg" 
+                                    className="gap-2 px-8 py-6 text-lg bg-green-600 hover:bg-green-700"
+                                    onClick={() => handleAction('checkIn')}
+                                    disabled={currentStatus === 'clockedIn' || loadingRecords}
+                                >
+                                    <ArrowUpRight className="h-6 w-6" />
+                                    Check-in
+                                </Button>
+                                <Button 
+                                    size="lg" 
+                                    variant="outline" 
+                                    className="gap-2 px-8 py-6 text-lg border-red-200 text-red-600 hover:bg-red-50"
+                                    onClick={() => handleAction('checkOut')}
+                                    disabled={currentStatus === 'clockedOut' || loadingRecords}
+                                >
+                                    <ArrowDownLeft className="h-6 w-6" />
+                                    Check-out
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </CardContent>
             </Card>
             
             {/* Show My Attendance History (Placeholder/Future Feature) */}
-             <Card>
-                <CardHeader><CardTitle>Riwayat Absensi Anda</CardTitle></CardHeader>
+            <Card className="shadow-md border-0">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50">
+                    <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Riwayat Absensi Anda
+                    </CardTitle>
+                </CardHeader>
                 <CardContent>
                     <p className="text-muted-foreground">Riwayat absensi pribadi akan ditampilkan di sini.</p>
                 </CardContent>
-             </Card>
+            </Card>
         </div>
     );
     
     const renderManagementView = () => (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold">Rincian Kehadiran Staff</h1>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filter Kehadiran Staff</CardTitle>
+            {/* Header Section dengan Background Gradient */}
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+                <h1 className="text-3xl font-bold tracking-tight">Rincian Kehadiran Staff</h1>
+                <p className="text-blue-100 mt-1">Pantau dan kelola kehadiran staff untuk produktivitas yang optimal.</p>
+            </div>
+            
+            {/* Filter Section dengan Desain yang Lebih Menarik */}
+            <Card className="shadow-md border-0 overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <Filter className="h-5 w-5 text-slate-600" />
+                        Filter Kehadiran Staff
+                    </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                         <div className="space-y-2">
-                           <Label htmlFor="date-start">Mulai Tgl</Label>
-                           <Input type="date" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} />
+                           <Label htmlFor="date-start" className="text-sm font-medium">Mulai Tgl</Label>
+                           <Input 
+                               type="date" 
+                               value={filterDateStart} 
+                               onChange={e => setFilterDateStart(e.target.value)}
+                               className="border-slate-200 focus:border-blue-500"
+                           />
                         </div>
                         <div className="space-y-2">
-                           <Label htmlFor="date-end">Sampai Tgl</Label>
-                           <Input type="date" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} />
+                           <Label htmlFor="date-end" className="text-sm font-medium">Sampai Tgl</Label>
+                           <Input 
+                               type="date" 
+                               value={filterDateEnd} 
+                               onChange={e => setFilterDateEnd(e.target.value)}
+                               className="border-slate-200 focus:border-blue-500"
+                           />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="filter-group">Group</Label>
+                            <Label htmlFor="filter-group" className="text-sm font-medium">Group</Label>
                             <Select value={filterGroup} onValueChange={setFilterGroup}>
-                                <SelectTrigger id="filter-group"><SelectValue placeholder="Semua Group" /></SelectTrigger>
+                                <SelectTrigger id="filter-group" className="border-slate-200">
+                                    <SelectValue placeholder="Semua Group" />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Semua Group</SelectItem>
                                     {availableGroups.map(group => (
@@ -363,56 +464,197 @@ const Attendance = () => {
                             </Select>
                         </div>
                          <div className="space-y-2">
-                            <Label htmlFor="search-name">Cari Staff</Label>
-                            <Input placeholder="Cari nama staff..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                            <Label htmlFor="search-name" className="text-sm font-medium">Cari Staff</Label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Cari nama staff..." 
+                                    value={searchTerm} 
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="pl-10 border-slate-200 focus:border-blue-500"
+                                />
+                            </div>
                         </div>
                     </div>
                 </CardContent>
             </Card>
             
-            <Card>
-                <CardHeader><CardTitle>Rekap Absensi Staff ({managementRecords.length} Hari)</CardTitle></CardHeader>
-                <CardContent>
+            {/* Tabel Data Kehadiran */}
+            <Card className="shadow-md border-0 overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5" />
+                            Rekap Absensi Staff
+                        </CardTitle>
+                        <div className="text-sm text-muted-foreground">
+                            Menampilkan {managementRecords.length} dari {totalRecords} data
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
                     {loadingRecords ? (
                          <div className="flex justify-center items-center h-64">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                          </div>
                     ) : (
-                         <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Tanggal</TableHead>
-                                        <TableHead>Nama Staff</TableHead>
-                                        <TableHead>Group</TableHead>
-                                        <TableHead>Check-in</TableHead>
-                                        <TableHead>Check-out</TableHead>
-                                        <TableHead>Durasi</TableHead> {/* <-- KOLOM BARU */}
-                                        <TableHead>Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {managementRecords.length === 0 && (
-                                         <TableRow><TableCell colSpan={7} className="text-center h-24">Tidak ada data kehadiran staff ditemukan.</TableCell></TableRow>
-                                    )}
-                                    {managementRecords.map(record => (
-                                        <TableRow key={record.id}>
-                                            <TableCell>{formatDateOnly(record.attendance_date)}</TableCell>
-                                            <TableCell className="font-medium">{record.employee_name}</TableCell>
-                                            <TableCell>{record.group_name}</TableCell>
-                                            <TableCell>{formatTime(record.check_in)}</TableCell>
-                                            <TableCell>{formatTime(record.check_out)}</TableCell>
-                                            <TableCell>{calculateDuration(record.check_in, record.check_out)}</TableCell> {/* <-- DATA BARU */}
-                                            <TableCell>
-                                                 <Badge variant={record.status === 'present' ? 'default' : 'secondary'} className={cn(record.status === 'present' ? 'bg-success hover:bg-success/90' : '')}>
-                                                    {record.status}
-                                                 </Badge>
-                                            </TableCell>
+                         <>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader className="bg-slate-50">
+                                        <TableRow>
+                                            <TableHead className="font-medium text-slate-700">Tanggal</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Nama Staff</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Group</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Check-in</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Check-out</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Durasi</TableHead>
+                                            <TableHead className="font-medium text-slate-700">Status</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                         </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {managementRecords.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                                    Tidak ada data kehadiran staff ditemukan.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        {managementRecords.map(record => (
+                                            <TableRow key={record.id} className="hover:bg-slate-50 transition-colors">
+                                                <TableCell className="font-medium">{formatDateOnly(record.attendance_date)}</TableCell>
+                                                <TableCell className="font-medium">{record.employee_name}</TableCell>
+                                                <TableCell>{record.group_name}</TableCell>
+                                                <TableCell>{formatTime(record.check_in)}</TableCell>
+                                                <TableCell>{formatTime(record.check_out)}</TableCell>
+                                                <TableCell>{calculateDuration(record.check_in, record.check_out)}</TableCell>
+                                                <TableCell>
+                                                     <Badge 
+                                                         variant={record.status === 'present' ? 'default' : 'secondary'} 
+                                                         className={cn(
+                                                             record.status === 'present' ? 'bg-green-600 hover:bg-green-600/90' : '',
+                                                             'whitespace-nowrap'
+                                                         )}
+                                                     >
+                                                        {record.status}
+                                                     </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            
+                            {/* Pagination Component */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between px-4 py-3 border-t">
+                                    <div className="text-sm text-muted-foreground">
+                                        Halaman {currentPage} dari {totalPages} (Total {totalRecords} data)
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={goToFirstPage}
+                                            disabled={currentPage === 1}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <ChevronsLeft className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={goToPreviousPage}
+                                            disabled={currentPage === 1}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        
+                                        <div className="flex items-center space-x-1">
+                                            {/* Show current page and one page before/after */}
+                                            {currentPage > 2 && (
+                                                <>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => goToPage(1)}
+                                                        className="h-8 w-8 p-0"
+                                                    >
+                                                        1
+                                                    </Button>
+                                                    {currentPage > 3 && <span className="px-1">...</span>}
+                                                </>
+                                            )}
+                                            
+                                            {currentPage > 1 && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => goToPage(currentPage - 1)}
+                                                    className="h-8 w-8 p-0"
+                                                >
+                                                    {currentPage - 1}
+                                                </Button>
+                                            )}
+                                            
+                                            <Button
+                                                variant="default"
+                                                size="sm"
+                                                onClick={() => goToPage(currentPage)}
+                                                className="h-8 w-8 p-0"
+                                            >
+                                                {currentPage}
+                                            </Button>
+                                            
+                                            {currentPage < totalPages && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => goToPage(currentPage + 1)}
+                                                    className="h-8 w-8 p-0"
+                                                >
+                                                    {currentPage + 1}
+                                                </Button>
+                                            )}
+                                            
+                                            {currentPage < totalPages - 1 && (
+                                                <>
+                                                    {currentPage < totalPages - 2 && <span className="px-1">...</span>}
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => goToPage(totalPages)}
+                                                        className="h-8 w-8 p-0"
+                                                    >
+                                                        {totalPages}
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
+                                        
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={goToNextPage}
+                                            disabled={currentPage === totalPages}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={goToLastPage}
+                                            disabled={currentPage === totalPages}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <ChevronsRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                         </>
                     )}
                 </CardContent>
             </Card>

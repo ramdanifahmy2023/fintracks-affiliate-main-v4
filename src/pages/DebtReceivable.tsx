@@ -1,18 +1,16 @@
-// src/pages/DebtReceivable.tsx
-
 import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // <-- TAMBAHAN
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; // <-- TAMBAHAN
+} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -20,7 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Download, Loader2, ArrowUpRight, ArrowDownLeft, MoreHorizontal, Pencil, Trash2, CalendarIcon } from "lucide-react";
+import { Plus, Search, Download, Loader2, ArrowUpRight, ArrowDownLeft, MoreHorizontal, Pencil, Trash2, CalendarIcon, Filter, CreditCard, TrendingUp, TrendingDown, Scale } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -208,11 +206,11 @@ const DebtReceivable = () => {
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case "Lunas":
-        return <Badge className="bg-success">Lunas</Badge>;
+        return <Badge className="bg-green-600 hover:bg-green-600/90">Lunas</Badge>;
       case "Cicilan":
-        return <Badge variant="secondary">Cicilan</Badge>;
+        return <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100/80">Cicilan</Badge>;
       case "Belum Lunas":
-        return <Badge className="bg-destructive">Belum Lunas</Badge>;
+        return <Badge className="bg-red-600 hover:bg-red-600/90">Belum Lunas</Badge>;
       default:
         return <Badge variant="outline">{status || "Pending"}</Badge>;
     }
@@ -283,32 +281,32 @@ const DebtReceivable = () => {
 
   const renderTable = (items: DebtData[]) => (
     <Table>
-      <TableHeader>
+      <TableHeader className="bg-slate-50">
         <TableRow>
-          <TableHead>Tanggal Dibuat</TableHead>
-          <TableHead>Pihak Terkait</TableHead>
-          <TableHead>Grup</TableHead>
-          <TableHead>Jatuh Tempo</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Nominal</TableHead>
-          {canManage && <TableHead>Action</TableHead>}
+          <TableHead className="font-medium text-slate-700">Tanggal Dibuat</TableHead>
+          <TableHead className="font-medium text-slate-700">Pihak Terkait</TableHead>
+          <TableHead className="font-medium text-slate-700">Grup</TableHead>
+          <TableHead className="font-medium text-slate-700">Jatuh Tempo</TableHead>
+          <TableHead className="font-medium text-slate-700">Status</TableHead>
+          <TableHead className="text-right font-medium text-slate-700">Nominal</TableHead>
+          {canManage && <TableHead className="text-center font-medium text-slate-700">Action</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center">
+            <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center text-muted-foreground">
               {searchTerm ? "Tidak ada data ditemukan." : "Belum ada data."}
             </TableCell>
           </TableRow>
         ) : (
           items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{formatDate(item.created_at)}</TableCell>
+            <TableRow key={item.id} className="hover:bg-slate-50 transition-colors">
+              <TableCell className="font-medium">{formatDate(item.created_at)}</TableCell>
               <TableCell className="font-medium">{item.counterparty}</TableCell>
               <TableCell>
                 {item.groups ? (
-                  <Badge variant="outline">{item.groups.name}</Badge>
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{item.groups.name}</Badge>
                 ) : (
                   "-"
                 )}
@@ -316,27 +314,27 @@ const DebtReceivable = () => {
               <TableCell>{formatDate(item.due_date)}</TableCell>
               <TableCell>{getStatusBadge(item.status)}</TableCell>
               <TableCell className={cn(
-                  "text-right font-medium",
-                  item.type === 'debt' ? 'text-destructive' : 'text-success'
+                  "text-right font-bold",
+                  item.type === 'debt' ? 'text-red-600' : 'text-green-600'
                 )}>
                 {formatCurrency(item.amount)}
               </TableCell>
               {canManage && (
-                <TableCell>
+                <TableCell className="text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="hover:bg-slate-100">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditClick(item)}>
+                      <DropdownMenuContent align="end" className="border-slate-200">
+                        <DropdownMenuItem onClick={() => handleEditClick(item)} className="hover:bg-blue-50 focus:bg-blue-50">
                           <Pencil className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          className="text-destructive"
+                          className="text-destructive hover:bg-red-50 focus:bg-red-50"
                           onClick={() => handleDeleteClick(item)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
@@ -356,78 +354,99 @@ const DebtReceivable = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Saldo Hutang & Piutang</h1>
-            <p className="text-muted-foreground">Lacak semua kewajiban dan tagihan.</p>
+        {/* Header Section dengan Background Gradient */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Saldo Hutang & Piutang</h1>
+              <p className="text-blue-100 mt-1">
+                Lacak semua kewajiban dan tagihan dengan mudah dan efisien.
+              </p>
+            </div>
+            {canCreate && (
+              <Button className="gap-2 bg-white text-blue-600 hover:bg-blue-50 shadow-md" onClick={handleAddClick}>
+                <Plus className="h-4 w-4" />
+                Tambah Catatan
+              </Button>
+            )}
           </div>
-          {canCreate && (
-            <Button className="gap-2" onClick={handleAddClick}>
-              <Plus className="h-4 w-4" />
-              Tambah Catatan
-            </Button>
-          )}
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards dengan Desain yang Lebih Menarik */}
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-red-50 to-rose-50">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowDownLeft className="h-4 w-4 text-destructive" />
+                <div className="p-1.5 bg-red-500 rounded-md">
+                  <TrendingDown className="h-4 w-4 text-white" />
+                </div>
                 Total Hutang (Belum Lunas)
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-red-600">
                 {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(totalDebt)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Total kewajiban yang belum dilunasi</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-emerald-50">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowUpRight className="h-4 w-4 text-success" />
+                <div className="p-1.5 bg-green-500 rounded-md">
+                  <TrendingUp className="h-4 w-4 text-white" />
+                </div>
                 Total Piutang (Belum Lunas)
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-green-600">
                 {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(totalReceivable)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Total tagihan yang belum diterima</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-blue-500 rounded-md">
+                  <Scale className="h-4 w-4 text-white" />
+                </div>
                 Posisi Keuangan (Net)
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <div
                 className={`text-2xl font-bold ${
-                  netPosition >= 0 ? "text-success" : "text-destructive"
+                  netPosition >= 0 ? "text-blue-600" : "text-red-600"
                 }`}
               >
                 {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(netPosition)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Selisih antara piutang dan hutang</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* --- UI FILTER (TAMBAHAN) --- */}
-        <Card>
-          <CardHeader>
+        {/* UI FILTER dengan Desain yang Lebih Menarik */}
+        <Card className="shadow-md border-0 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-5 w-5 text-slate-600" />
+              Filter Data
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                {/* Filter Tanggal Mulai */}
                 <div className="space-y-2">
-                    <Label htmlFor="date-start">Tanggal Mulai</Label>
+                    <Label htmlFor="date-start" className="text-sm font-medium">Tanggal Mulai</Label>
                     <Popover>
                     <PopoverTrigger asChild>
                         <Button
                         id="date-start"
                         variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal", !filterDateStart && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-left font-normal border-slate-200", !filterDateStart && "text-muted-foreground")}
                         >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {filterDateStart ? format(parseISO(filterDateStart), "PPP") : <span>Pilih tanggal</span>}
@@ -446,13 +465,13 @@ const DebtReceivable = () => {
                 
                 {/* Filter Tanggal Selesai */}
                 <div className="space-y-2">
-                    <Label htmlFor="date-end">Tanggal Selesai</Label>
+                    <Label htmlFor="date-end" className="text-sm font-medium">Tanggal Selesai</Label>
                     <Popover>
                     <PopoverTrigger asChild>
                         <Button
                         id="date-end"
                         variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal", !filterDateEnd && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-left font-normal border-slate-200", !filterDateEnd && "text-muted-foreground")}
                         >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {filterDateEnd ? format(parseISO(filterDateEnd), "PPP") : <span>Pilih tanggal</span>}
@@ -470,9 +489,9 @@ const DebtReceivable = () => {
                 </div>
               {/* Filter Grup */}
               <div className="space-y-2">
-                <Label htmlFor="filter-group">Group</Label>
+                <Label htmlFor="filter-group" className="text-sm font-medium">Group</Label>
                 <Select value={filterGroup} onValueChange={setFilterGroup}>
-                  <SelectTrigger id="filter-group" className="w-full">
+                  <SelectTrigger id="filter-group" className="border-slate-200">
                     <SelectValue placeholder="Pilih Group" />
                   </SelectTrigger>
                   <SelectContent>
@@ -485,9 +504,9 @@ const DebtReceivable = () => {
               </div>
                {/* Filter Status */}
               <div className="space-y-2">
-                <Label htmlFor="filter-status">Status</Label>
+                <Label htmlFor="filter-status" className="text-sm font-medium">Status</Label>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger id="filter-status" className="w-full">
+                  <SelectTrigger id="filter-status" className="border-slate-200">
                     <SelectValue placeholder="Semua Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -499,51 +518,50 @@ const DebtReceivable = () => {
                 </Select>
               </div>
             </div>
-          </CardHeader>
+          </CardContent>
         </Card>
-        {/* ----------------------------- */}
 
-        {/* Tabs and Table */}
-        <Card>
-          <CardHeader>
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "debt" | "receivable")}>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <TabsList>
-                  <TabsTrigger value="debt">Hutang (Kewajiban)</TabsTrigger>
-                  <TabsTrigger value="receivable">Piutang (Tagihan)</TabsTrigger>
+        {/* Tabs and Table dengan Desain yang Lebih Modern */}
+        <Card className="shadow-md border-0 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "debt" | "receivable")} className="w-full sm:w-auto">
+                <TabsList className="grid w-full sm:w-auto grid-cols-2 bg-slate-100">
+                  <TabsTrigger value="debt" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Hutang (Kewajiban)</TabsTrigger>
+                  <TabsTrigger value="receivable" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Piutang (Tagihan)</TabsTrigger>
                 </TabsList>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Cari nama pihak..." 
-                      className="pl-10 w-full sm:w-64"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  {/* TOMBOL EXPORT (SUDAH KITA SIAPKAN) */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="gap-2" disabled={isExporting || (activeTab === 'debt' ? debts.length === 0 : receivables.length === 0)}>
-                            <Download className="h-4 w-4" />
-                            {isExporting ? 'Mengekspor...' : 'Export'}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleExport('pdf')} disabled={isExporting}>
-                            Export PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleExport('csv')} disabled={isExporting}>
-                            Export CSV
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              </Tabs>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Cari nama pihak..." 
+                    className="pl-10 w-full sm:w-64 border-slate-200 focus:border-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
+                {/* TOMBOL EXPORT */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="gap-2 bg-white hover:bg-slate-50 border-slate-200" disabled={isExporting || (activeTab === 'debt' ? debts.length === 0 : receivables.length === 0)}>
+                          <Download className="h-4 w-4" />
+                          {isExporting ? 'Mengekspor...' : 'Export'}
+                      </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExport('pdf')} disabled={isExporting}>
+                          Export PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('csv')} disabled={isExporting}>
+                          Export CSV
+                      </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            </Tabs>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {loading ? (
                 <div className="flex justify-center items-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -551,10 +569,14 @@ const DebtReceivable = () => {
             ) : (
               <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "debt" | "receivable")}>
                 <TabsContent value="debt" className="mt-0">
-                  {renderTable(debts)}
+                  <div className="overflow-x-auto">
+                    {renderTable(debts)}
+                  </div>
                 </TabsContent>
                 <TabsContent value="receivable" className="mt-0">
-                  {renderTable(receivables)}
+                  <div className="overflow-x-auto">
+                    {renderTable(receivables)}
+                  </div>
                 </TabsContent>
               </Tabs>
             )}

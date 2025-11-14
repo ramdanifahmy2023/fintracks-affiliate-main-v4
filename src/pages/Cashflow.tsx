@@ -1,5 +1,3 @@
-// src/pages/Cashflow.tsx
-
 import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +47,11 @@ import {
   Download,
   CalendarIcon,
   Search,
-  Printer, // <-- 1. IMPORT IKON BARU
+  Printer,
+  Filter,
+  DollarSign,
+  CreditCard,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -110,7 +112,6 @@ const Cashflow = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
 
-  // --- 2. TAMBAHKAN 'printData' DARI HOOK ---
   const { exportToPDF, exportToCSV, isExporting, printData } = useExport();
 
   const canManage = profile && (
@@ -235,7 +236,6 @@ const Cashflow = () => {
     return t.type === activeTab;
   });
   
-  // --- 3. MODIFIKASI FUNGSI HANDLE EXPORT ---
   const handleExport = (type: 'pdf' | 'csv' | 'print') => {
     const columns = [
       { header: 'Tanggal', dataKey: 'transaction_date_formatted' },
@@ -277,65 +277,69 @@ const Cashflow = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Arus Kas (Cashflow)</h1>
-            <p className="text-muted-foreground">
-              Kelola semua pemasukan dan pengeluaran.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {/* --- 4. TAMBAHKAN OPSI CETAK DI SINI --- */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2" disabled={isExporting || filteredTransactions.length === 0}>
-                      <Download className="h-4 w-4" />
-                      {isExporting ? 'Mengekspor...' : 'Export'}
-                  </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleExport('pdf')} disabled={isExporting}>
-                      Export PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('csv')} disabled={isExporting}>
-                      Export CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleExport('print')} disabled={isExporting}>
-                      <Printer className="mr-2 h-4 w-4" />
-                      Cetak Halaman
-                  </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* ------------------------------------- */}
-            {canManage && (
-              <Button
-                className="gap-2"
-                onClick={() => setDialogs({ ...dialogs, add: true })}
-              >
-                <Plus className="h-4 w-4" />
-                Tambah Transaksi
-              </Button>
-            )}
+        {/* Header Section dengan Background Gradient */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Arus Kas (Cashflow)</h1>
+              <p className="text-blue-100 mt-1">
+                Kelola semua pemasukan dan pengeluaran dengan mudah dan efisien.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2 bg-white text-blue-600 hover:bg-blue-50 shadow-md" disabled={isExporting || filteredTransactions.length === 0}>
+                        <Download className="h-4 w-4" />
+                        {isExporting ? 'Mengekspor...' : 'Export'}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleExport('pdf')} disabled={isExporting}>
+                        Export PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('csv')} disabled={isExporting}>
+                        Export CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleExport('print')} disabled={isExporting}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Cetak Halaman
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {canManage && (
+                <Button
+                  className="gap-2 bg-white text-blue-600 hover:bg-blue-50 shadow-md"
+                  onClick={() => setDialogs({ ...dialogs, add: true })}
+                >
+                  <Plus className="h-4 w-4" />
+                  Tambah Transaksi
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         
-        {/* UI FILTER BARU */}
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-lg">Filter Data</CardTitle>
+        {/* UI FILTER BARU dengan Desain yang Lebih Menarik */}
+        <Card className="shadow-md border-0 overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                    <Filter className="h-5 w-5 text-slate-600" />
+                    Filter Data
+                </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Filter Tanggal Mulai */}
                     <div className="space-y-2">
-                        <Label htmlFor="date-start">Tanggal Mulai</Label>
+                        <Label htmlFor="date-start" className="text-sm font-medium">Tanggal Mulai</Label>
                         <Popover>
                         <PopoverTrigger asChild>
                             <Button
                             id="date-start"
                             variant={"outline"}
-                            className={cn("w-full justify-start text-left font-normal", !filterDateStart && "text-muted-foreground")}
+                            className={cn("w-full justify-start text-left font-normal border-slate-200", !filterDateStart && "text-muted-foreground")}
                             >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {filterDateStart ? format(parseISO(filterDateStart), "PPP") : <span>Pilih tanggal</span>}
@@ -354,13 +358,13 @@ const Cashflow = () => {
                     
                     {/* Filter Tanggal Selesai */}
                     <div className="space-y-2">
-                        <Label htmlFor="date-end">Tanggal Selesai</Label>
+                        <Label htmlFor="date-end" className="text-sm font-medium">Tanggal Selesai</Label>
                         <Popover>
                         <PopoverTrigger asChild>
                             <Button
                             id="date-end"
                             variant={"outline"}
-                            className={cn("w-full justify-start text-left font-normal", !filterDateEnd && "text-muted-foreground")}
+                            className={cn("w-full justify-start text-left font-normal border-slate-200", !filterDateEnd && "text-muted-foreground")}
                             >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {filterDateEnd ? format(parseISO(filterDateEnd), "PPP") : <span>Pilih tanggal</span>}
@@ -379,9 +383,9 @@ const Cashflow = () => {
 
                     {/* Filter Grup */}
                     <div className="space-y-2">
-                        <Label htmlFor="filter-group">Group</Label>
+                        <Label htmlFor="filter-group" className="text-sm font-medium">Group</Label>
                         <Select value={filterGroup} onValueChange={setFilterGroup}>
-                        <SelectTrigger id="filter-group">
+                        <SelectTrigger id="filter-group" className="border-slate-200">
                             <SelectValue placeholder="Pilih Group" />
                         </SelectTrigger>
                         <SelectContent>
@@ -395,9 +399,9 @@ const Cashflow = () => {
                     
                     {/* Filter Kategori */}
                     <div className="space-y-2">
-                        <Label htmlFor="filter-category">Kategori</Label>
+                        <Label htmlFor="filter-category" className="text-sm font-medium">Kategori</Label>
                         <Select value={filterCategory} onValueChange={setFilterCategory}>
-                        <SelectTrigger id="filter-category">
+                        <SelectTrigger id="filter-category" className="border-slate-200">
                             <SelectValue placeholder="Pilih Kategori" />
                         </SelectTrigger>
                         <SelectContent>
@@ -412,174 +416,191 @@ const Cashflow = () => {
             </CardContent>
         </Card>
 
-        {/* KARTU SUMMARY (Sekarang menampilkan data terfilter) */}
+        {/* KARTU SUMMARY dengan Desain yang Lebih Menarik */}
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Pemasukan (Filter)</CardTitle>
-              <TrendingUp className="h-4 w-4 text-success" />
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-emerald-50">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-green-500 rounded-md">
+                  <TrendingUp className="h-4 w-4 text-white" />
+                </div>
+                Total Pemasukan (Filter)
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">
-                {loading ? <Loader2 className="h-6 w-6 animate-spin"/> : formatCurrency(totalIncome)}
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-green-600">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(totalIncome)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Total pemasukan berdasarkan filter</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Pengeluaran (Filter)</CardTitle>
-              <TrendingDown className="h-4 w-4 text-destructive" />
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-red-50 to-rose-50">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-red-500 rounded-md">
+                  <TrendingDown className="h-4 w-4 text-white" />
+                </div>
+                Total Pengeluaran (Filter)
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {loading ? <Loader2 className="h-6 w-6 animate-spin"/> : formatCurrency(totalExpense)}
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-red-600">
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(totalExpense)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Total pengeluaran berdasarkan filter</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo (Net Filter)</CardTitle>
-              <Scale className="h-4 w-4 text-muted-foreground" />
+          <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300 border-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-blue-500 rounded-md">
+                  <Wallet className="h-4 w-4 text-white" />
+                </div>
+                Saldo (Net Filter)
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <div className={cn(
                 "text-2xl font-bold",
-                netBalance >= 0 ? "text-success" : "text-destructive"
+                netBalance >= 0 ? "text-blue-600" : "text-red-600"
               )}>
-                {loading ? <Loader2 className="h-6 w-6 animate-spin"/> : formatCurrency(netBalance)}
+                {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(netBalance)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Saldo bersih setelah pemasukan dan pengeluaran</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Tabs dan Tabel Data */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          <div className="flex justify-between items-center mb-2">
-            <TabsList>
-              <TabsTrigger value="all">Semua Transaksi</TabsTrigger>
-              <TabsTrigger value="income">Pemasukan</TabsTrigger>
-              <TabsTrigger value="expense">Pengeluaran</TabsTrigger>
-            </TabsList>
-            {/* Search Input */}
-            <div className="relative w-full max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Cari deskripsi..." 
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+        {/* Tabs dan Tabel Data dengan Desain yang Lebih Modern */}
+        <Card className="shadow-md border-0 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full sm:w-auto">
+                <TabsList className="grid w-full sm:w-auto grid-cols-3 bg-slate-100">
+                  <TabsTrigger value="all" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Semua Transaksi</TabsTrigger>
+                  <TabsTrigger value="income" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Pemasukan</TabsTrigger>
+                  <TabsTrigger value="expense" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Pengeluaran</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {/* Search Input */}
+              <div className="relative w-full sm:w-auto">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Cari deskripsi..." 
+                  className="pl-10 w-full sm:w-64 border-slate-200 focus:border-blue-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
-
-          <Card className="mt-4">
-            <CardContent className="pt-6">
-              {loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-slate-50">
+                    <TableRow>
+                      <TableHead className="font-medium text-slate-700">Tanggal</TableHead>
+                      <TableHead className="font-medium text-slate-700">Deskripsi</TableHead>
+                      <TableHead className="font-medium text-slate-700">Grup</TableHead>
+                      <TableHead className="font-medium text-slate-700">Kategori</TableHead>
+                      <TableHead className="font-medium text-slate-700">Oleh</TableHead>
+                      <TableHead className="font-medium text-slate-700">Bukti</TableHead>
+                      <TableHead className="text-right font-medium text-slate-700">Jumlah</TableHead>
+                      {canManage && <TableHead className="w-20 text-center font-medium text-slate-700">Aksi</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTransactions.length === 0 && (
                       <TableRow>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Deskripsi</TableHead>
-                        <TableHead>Grup</TableHead>
-                        <TableHead>Kategori</TableHead>
-                        <TableHead>Oleh</TableHead>
-                        <TableHead>Bukti</TableHead>
-                        <TableHead className="text-right">Jumlah</TableHead>
-                        {canManage && <TableHead className="w-20">Aksi</TableHead>}
+                        <TableCell colSpan={canManage ? 8 : 7} className="text-center h-24 text-muted-foreground">
+                          Tidak ada data transaksi untuk filter yang dipilih.
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTransactions.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={canManage ? 8 : 7} className="text-center h-24">
-                            Tidak ada data transaksi untuk filter yang dipilih.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {filteredTransactions.map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell className="whitespace-nowrap">{formatDate(t.transaction_date)}</TableCell>
-                          <TableCell className="font-medium max-w-xs truncate">
-                            {t.description}
-                          </TableCell>
-                          <TableCell>
-                            {t.groups ? (
-                              <Badge variant="outline" className="whitespace-nowrap">{t.groups.name}</Badge>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="whitespace-nowrap">{t.category}</Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {t.profiles?.full_name || "-"}
-                          </TableCell>
-                          <TableCell>
-                            {t.proof_url ? (
-                              <Button variant="outline" size="sm" asChild>
-                                <a href={t.proof_url} target="_blank" rel="noopener noreferrer">
-                                  <LinkIcon className="h-4 w-4" />
-                                </a>
-                              </Button>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell className={cn(
-                            "text-right font-bold whitespace-nowrap",
-                            t.type === 'income' ? "text-success" : "text-destructive"
-                          )}>
-                            {t.type === 'expense' && "-"}
-                            {formatCurrency(t.amount)}
-                          </TableCell>
-                          {canManage && (
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      setDialogs({ ...dialogs, edit: t })
-                                    }
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" /> Edit
-                                  </DropdownMenuItem>
-                                  {canDelete && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive"
-                                        onClick={() =>
-                                          setDialogs({ ...dialogs, delete: t })
-                                        }
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" /> Hapus
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
+                    )}
+                    {filteredTransactions.map((t) => (
+                      <TableRow key={t.id} className="hover:bg-slate-50 transition-colors">
+                        <TableCell className="whitespace-nowrap font-medium">{formatDate(t.transaction_date)}</TableCell>
+                        <TableCell className="font-medium max-w-xs truncate">
+                          {t.description}
+                        </TableCell>
+                        <TableCell>
+                          {t.groups ? (
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap">{t.groups.name}</Badge>
+                          ) : (
+                            "-"
                           )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </Tabs>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap">{t.category}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {t.profiles?.full_name || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {t.proof_url ? (
+                            <Button variant="outline" size="sm" className="bg-blue-50 hover:bg-blue-100 border-blue-200" asChild>
+                              <a href={t.proof_url} target="_blank" rel="noopener noreferrer">
+                                <LinkIcon className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className={cn(
+                          "text-right font-bold whitespace-nowrap",
+                          t.type === 'income' ? "text-green-600" : "text-red-600"
+                        )}>
+                          {t.type === 'expense' && "-"}
+                          {formatCurrency(t.amount)}
+                        </TableCell>
+                        {canManage && (
+                          <TableCell className="text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="border-slate-200">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setDialogs({ ...dialogs, edit: t })
+                                  }
+                                  className="hover:bg-blue-50 focus:bg-blue-50"
+                                >
+                                  <Edit className="mr-2 h-4 w-4" /> Edit
+                                </DropdownMenuItem>
+                                {canDelete && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive hover:bg-red-50 focus:bg-red-50"
+                                      onClick={() =>
+                                        setDialogs({ ...dialogs, delete: t })
+                                      }
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" /> Hapus
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {canManage && (
