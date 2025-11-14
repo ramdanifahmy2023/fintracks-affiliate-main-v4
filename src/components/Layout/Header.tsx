@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/components/ThemeProvider";
+// import { useTheme } dari "@/components/ThemeProvider" DIHAPUS
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,9 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { 
-  Moon, 
-  Sun, 
-  Laptop, 
+  // Moon, Sun, Laptop DIHAPUS
   Bell, 
   Check, 
   Trash2, 
@@ -46,47 +44,8 @@ import { cn } from "@/lib/utils";
 import type { NotificationType, Notification } from "@/types/notification";
 
 
-const ModeToggle = () => {
-  const { theme, setTheme } = useTheme();
+// --- SELURUH KOMPONEN ModeToggle DIHAPUS ---
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-9 w-9">
-          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem 
-          onClick={() => setTheme("light")}
-          className="cursor-pointer"
-        >
-          <Sun className="mr-2 h-4 w-4" />
-          <span>Light</span>
-          {theme === "light" && <span className="ml-auto">✓</span>}
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => setTheme("dark")}
-          className="cursor-pointer"
-        >
-          <Moon className="mr-2 h-4 w-4" />
-          <span>Dark</span>
-          {theme === "dark" && <span className="ml-auto">✓</span>}
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => setTheme("system")}
-          className="cursor-pointer"
-        >
-          <Laptop className="mr-2 h-4 w-4" />
-          <span>System</span>
-          {theme === "system" && <span className="ml-auto">✓</span>}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-};
 
 // Helper component untuk ikon notifikasi
 const NotificationIcon = ({ type }: { type: NotificationType }) => {
@@ -335,12 +294,10 @@ const UserNav = () => {
 };
 
 export const Header = () => {
-  // const { profile } = useAuth(); // If needed for conditional rendering
-
   return (
     <div className="flex items-center gap-1">
       <NotificationBell />
-      <ModeToggle />
+      {/* <ModeToggle /> DIHAPUS */}
       <UserNav />
     </div>
   );
