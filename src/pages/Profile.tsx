@@ -1,5 +1,4 @@
 // src/pages/Profile.tsx
-
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 
 // Import komponen UI
-import { Button, buttonVariants } from "@/components/ui/button"; // Import sudah benar di sini
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -56,6 +55,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 import {
   Loader2,
   CalendarIcon,
@@ -64,6 +64,13 @@ import {
   Sun,
   Laptop,
   Upload,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar as CalendarIcon2,
+  Shield,
+  Palette,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
@@ -201,7 +208,7 @@ const ProfilePage = () => {
       .toUpperCase();
   };
 
-  // --- 4. FUNGSI HANDLE UPLOAD (DIPERBAIKI) ---
+  // Fungsi handle upload avatar
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!user || !profile) {
       toast.error("Anda harus login untuk mengupload avatar.");
@@ -229,18 +236,16 @@ const ProfilePage = () => {
         });
       if (uploadError) throw uploadError;
 
-      // --- PERBAIKAN DI SINI ---
       // 2. Dapatkan Public URL (URL Bersih)
       const { data: urlData } = supabase.storage
         .from("avatars")
-        .getPublicUrl(filePath); // DAPATKAN URL BERSIH DULU
+        .getPublicUrl(filePath);
 
       if (!urlData.publicUrl) throw new Error("Gagal mendapatkan URL publik.");
       
       // 3. Tambahkan timestamp (cache-busting) SETELAH URL didapat
       const timestamp = new Date().getTime();
       const newUrl = `${urlData.publicUrl}?t=${timestamp}`;
-      // --- AKHIR PERBAIKAN ---
 
       // 4. Update URL di tabel 'profiles'
       const { error: updateError } = await supabase
@@ -262,110 +267,156 @@ const ProfilePage = () => {
       event.target.value = ""; // Reset input file
     }
   };
-  // ----------------------------------------
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Pengaturan Akun</h1>
+        {/* Header Section dengan Background Gradient */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Pengaturan Akun</h1>
+              <p className="text-blue-100 mt-1">
+                Kelola informasi profil dan preferensi akun Anda.
+              </p>
+            </div>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-col md:flex-row items-center gap-6">
-            {/* Avatar tetap menggunakan data dari context */}
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={profile?.avatar_url || ""} />
-              <AvatarFallback className="text-3xl">
-                {getAvatarFallback(profile?.full_name || "??")}
-              </AvatarFallback>
-            </Avatar>
+        {/* Profile Card */}
+        <Card className="shadow-lg overflow-hidden dark:bg-card dark:border-border">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 pb-6">
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              {/* Avatar Section */}
+              <div className="relative">
+                <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
+                  <AvatarImage src={profile?.avatar_url || ""} />
+                  <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                    {getAvatarFallback(profile?.full_name || "??")}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute bottom-0 right-0">
+                  <Label
+                    htmlFor="avatar-upload"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "gap-2 rounded-full p-2 cursor-pointer bg-white shadow-md hover:bg-gray-100",
+                      uploading && "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                  </Label>
+                  <Input
+                    id="avatar-upload"
+                    type="file"
+                    className="hidden"
+                    accept="image/png, image/jpeg, image/gif"
+                    onChange={handleUpload}
+                    disabled={uploading}
+                  />
+                </div>
+              </div>
 
-            <div className="flex-1 text-center md:text-left">
-              <CardTitle className="text-2xl">{profile?.full_name}</CardTitle>
-              <CardDescription>{profile?.email}</CardDescription>
-
-              {/* Ganti Button disabled dengan Label + Input fungsional */}
-              <div className="mt-2">
-                <Label
-                  htmlFor="avatar-upload"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "sm" }),
-                    "gap-2",
-                    uploading
-                      ? "cursor-not-allowed opacity-50"
-                      : "cursor-pointer"
+              {/* User Info */}
+              <div className="flex-1 text-center md:text-left">
+                <CardTitle className="text-2xl">{profile?.full_name}</CardTitle>
+                <CardDescription className="text-base flex items-center gap-2 mt-1">
+                  <Mail className="h-4 w-4" />
+                  {profile?.email}
+                </CardDescription>
+                <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
+                  {profile?.phone && (
+                    <div className="flex items-center gap-1 text-sm bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                      <Phone className="h-3 w-3" />
+                      {profile.phone}
+                    </div>
                   )}
-                >
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
+                  {profile?.address && (
+                    <div className="flex items-center gap-1 text-sm bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                      <MapPin className="h-3 w-3" />
+                      {profile.address}
+                    </div>
                   )}
-                  {uploading ? "Mengunggah..." : "Upload Foto"}
-                </Label>
-                <Input
-                  id="avatar-upload"
-                  type="file"
-                  className="hidden"
-                  accept="image/png, image/jpeg, image/gif"
-                  onChange={handleUpload}
-                  disabled={uploading}
-                />
+                  {profile?.date_of_birth && (
+                    <div className="flex items-center gap-1 text-sm bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                      <CalendarIcon2 className="h-3 w-3" />
+                      {format(new Date(profile.date_of_birth), "dd MMM yyyy")}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
         </Card>
 
-        <Tabs defaultValue="profile">
+        {/* Tabs */}
+        <Tabs defaultValue="profile" className="space-y-4">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="profile">Edit Profil</TabsTrigger>
-            <TabsTrigger value="password">Ganti Password</TabsTrigger>
-            <TabsTrigger value="theme">Tampilan</TabsTrigger>
+            <TabsTrigger value="profile" className="gap-2">
+              <User className="h-4 w-4" />
+              Profil
+            </TabsTrigger>
+            <TabsTrigger value="password" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Password
+            </TabsTrigger>
+            <TabsTrigger value="theme" className="gap-2">
+              <Palette className="h-4 w-4" />
+              Tampilan
+            </TabsTrigger>
           </TabsList>
-
+          
           <TabsContent value="profile">
-            <Card>
+            <Card className="shadow-lg dark:bg-card dark:border-border">
+              <CardHeader>
+                <CardTitle>Informasi Pribadi</CardTitle>
+                <CardDescription>
+                  Perbarui informasi profil Anda di sini.
+                </CardDescription>
+              </CardHeader>
               <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)}>
-                  <CardHeader>
-                    <CardTitle>Profil Pribadi</CardTitle>
-                    <CardDescription>
-                      Perbarui informasi kontak Anda.
-                    </CardDescription>
-                  </CardHeader>
+                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
                   <CardContent className="space-y-4">
-                    <FormField
-                      control={profileForm.control}
-                      name="full_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nama Lengkap</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={profileForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={profileForm.control}
+                        name="full_name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nama Lengkap</FormLabel>
+                            <FormControl>
+                              <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={profileForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={profileForm.control}
                         name="phone"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>No. HP</FormLabel>
+                            <FormLabel>Nomor Telepon</FormLabel>
                             <FormControl>
                               <Input {...field} value={field.value ?? ""} />
                             </FormControl>
@@ -377,7 +428,7 @@ const ProfilePage = () => {
                         control={profileForm.control}
                         name="date_of_birth"
                         render={({ field }) => (
-                          <FormItem className="flex flex-col pt-2">
+                          <FormItem className="flex flex-col">
                             <FormLabel>Tanggal Lahir</FormLabel>
                             <Popover>
                               <PopoverTrigger asChild>
@@ -415,6 +466,7 @@ const ProfilePage = () => {
                         )}
                       />
                     </div>
+                    
                     <FormField
                       control={profileForm.control}
                       name="address"
@@ -424,6 +476,7 @@ const ProfilePage = () => {
                           <FormControl>
                             <Textarea
                               placeholder="Alamat lengkap Anda..."
+                              className="resize-none"
                               {...field}
                               value={field.value ?? ""}
                             />
@@ -433,29 +486,30 @@ const ProfilePage = () => {
                       )}
                     />
                   </CardContent>
+                  <Separator />
                   <CardFooter>
                     <Button type="submit" disabled={loadingProfile}>
                       {loadingProfile && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
-                      Simpan Perubahan Profil
+                      Simpan Perubahan
                     </Button>
                   </CardFooter>
                 </form>
               </Form>
             </Card>
           </TabsContent>
-
+          
           <TabsContent value="password">
-            <Card>
+            <Card className="shadow-lg dark:bg-card dark:border-border">
+              <CardHeader>
+                <CardTitle>Ubah Password</CardTitle>
+                <CardDescription>
+                  Pastikan Anda menggunakan password yang kuat dan unik.
+                </CardDescription>
+              </CardHeader>
               <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}>
-                  <CardHeader>
-                    <CardTitle>Ganti Password</CardTitle>
-                    <CardDescription>
-                      Pastikan Anda menggunakan password yang kuat.
-                    </CardDescription>
-                  </CardHeader>
+                <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-6">
                   <CardContent className="space-y-4">
                     <FormField
                       control={passwordForm.control}
@@ -484,58 +538,77 @@ const ProfilePage = () => {
                       )}
                     />
                   </CardContent>
+                  <Separator />
                   <CardFooter>
                     <Button type="submit" disabled={loadingPassword}>
                       {loadingPassword && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
-                      Ganti Password
+                      Ubah Password
                     </Button>
                   </CardFooter>
                 </form>
               </Form>
             </Card>
           </TabsContent>
-
+          
           <TabsContent value="theme">
-            <Card>
+            <Card className="shadow-lg dark:bg-card dark:border-border">
               <CardHeader>
-                <CardTitle>Tampilan</CardTitle>
+                <CardTitle>Preferensi Tampilan</CardTitle>
                 <CardDescription>
-                  Sesuaikan tampilan aplikasi di perangkat Anda.
+                  Pilih tema yang nyaman untuk mata Anda.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
                 <RadioGroup
                   value={theme}
                   onValueChange={setTheme}
-                  className="space-y-3"
+                  className="grid grid-cols-1 md:grid-cols-3 gap-4"
                 >
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <RadioGroupItem value="light" id="light" />
                     <Label
                       htmlFor="light"
-                      className="flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-3 cursor-pointer font-normal"
                     >
-                      <Sun className="h-4 w-4" /> Terang
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-input bg-white">
+                        <Sun className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-medium">Terang</div>
+                        <div className="text-sm text-muted-foreground">Tema terang</div>
+                      </div>
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <RadioGroupItem value="dark" id="dark" />
                     <Label
                       htmlFor="dark"
-                      className="flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-3 cursor-pointer font-normal"
                     >
-                      <Moon className="h-4 w-4" /> Gelap
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-input bg-gray-900">
+                        <Moon className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <div className="font-medium">Gelap</div>
+                        <div className="text-sm text-muted-foreground">Tema gelap</div>
+                      </div>
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <RadioGroupItem value="system" id="system" />
                     <Label
                       htmlFor="system"
-                      className="flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-3 cursor-pointer font-normal"
                     >
-                      <Laptop className="h-4 w-4" /> Sistem
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-input bg-gradient-to-br from-white to-gray-900">
+                        <Laptop className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-medium">Sistem</div>
+                        <div className="text-sm text-muted-foreground">Mengikuti sistem</div>
+                      </div>
                     </Label>
                   </div>
                 </RadioGroup>
@@ -544,8 +617,8 @@ const ProfilePage = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Card Logout */}
-        <Card className="border-destructive">
+        {/* Logout Card */}
+        <Card className="border-destructive shadow-lg dark:bg-card dark:border-border">
           <CardHeader>
             <CardTitle className="text-destructive">Logout</CardTitle>
             <CardDescription>
