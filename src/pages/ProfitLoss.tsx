@@ -24,6 +24,7 @@ import {
   CreditCard,
   PiggyBank,
   Calculator,
+  HandHeart,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -63,7 +64,7 @@ const ProfitLoss = () => {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [expenseBreakdown, setExpenseBreakdown] = useState<SummaryItem[]>([]);
-  const [taxRate, setTaxRate] = useState(0.1); 
+  const [zakatRate, setZakatRate] = useState(0.025); // PERUBAHAN: Default 2.5% untuk zakat
   
   // STATE BARU UNTUK FILTER
   const [filterDateStart, setFilterDateStart] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
@@ -185,8 +186,8 @@ const ProfitLoss = () => {
   
   // Perhitungan Laba Rugi (otomatis update saat state berubah)
   const labaKotor = totalIncome - totalExpense; 
-  const taxAmount = labaKotor * taxRate;       
-  const labaBersih = labaKotor - taxAmount;     
+  const zakatAmount = labaKotor * zakatRate;       // PERUBAHAN: Ganti taxAmount menjadi zakatAmount
+  const labaBersih = labaKotor - zakatAmount;     // PERUBAHAN: Ganti taxAmount menjadi zakatAmount
   
   const financialSummaryData = [
     { name: 'Pendapatan (Komisi Cair)', Amount: totalIncome, fill: 'hsl(var(--success))' },
@@ -206,7 +207,7 @@ const ProfitLoss = () => {
       { description: `Total Pendapatan (Filter)`, amount: totalIncome },
       { description: `Total Pengeluaran (Filter)`, amount: -totalExpense },
       { description: 'Laba Kotor', amount: labaKotor },
-      { description: `Pajak (${(taxRate * 100).toFixed(0)}%)`, amount: -taxAmount },
+      { description: `Infaq/Zakat Mal (${(zakatRate * 100).toFixed(1)}%)`, amount: -zakatAmount }, // PERUBAHAN: Update deskripsi
       { description: 'Laba Bersih (Net Income)', amount: labaBersih },
     ];
 
@@ -426,12 +427,12 @@ const ProfitLoss = () => {
               <div className={cn("text-2xl font-bold", labaBersih >= 0 ? "text-green-600" : "text-red-600")}>
                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(labaBersih)}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Laba kotor dikurangi pajak</p>
+              <p className="text-xs text-muted-foreground mt-1">Laba kotor dikurangi infaq/zakat</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts and Tax Calculation */}
+        {/* Charts and Zakat Calculation */}
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2 shadow-md border-0 overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 pb-4">
@@ -466,26 +467,26 @@ const ProfitLoss = () => {
           
           <Card className="shadow-md border-0 overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 pb-4">
-              <CardTitle>Perhitungan Pajak & Laba Bersih</CardTitle>
-              <CardDescription className="text-slate-600">Asumsi Pajak Bisnis ({Math.round(taxRate * 100)}% dari Laba Kotor).</CardDescription>
+              <CardTitle>Perhitungan Infaq/Zakat & Laba Bersih</CardTitle>
+              <CardDescription className="text-slate-600">Infaq/Zakat Mal ({Math.round(zakatRate * 100)}% dari Laba Kotor).</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none flex items-center gap-2">
-                    <Percent className="h-4 w-4 text-muted-foreground" />
-                    Tarif Pajak (Perubahan Manual) 
+                    <HandHeart className="h-4 w-4 text-muted-foreground" />
+                    Tarif Infaq/Zakat (Perubahan Manual) 
                 </label>
                 <div className="flex items-center gap-2">
                    <Input
                        type="number"
                        min="0"
                        max="1"
-                       step="0.01"
-                       value={taxRate}
-                       onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                       step="0.001"
+                       value={zakatRate}
+                       onChange={(e) => setZakatRate(parseFloat(e.target.value) || 0)}
                        className="w-24 text-right border-slate-200 focus:border-blue-500"
                    />
-                   <span className="text-muted-foreground text-sm">({(taxRate * 100).toFixed(0)}%)</span>
+                   <span className="text-muted-foreground text-sm">({(zakatRate * 100).toFixed(1)}%)</span>
                 </div>
               </div>
               
@@ -495,8 +496,8 @@ const ProfitLoss = () => {
                      <span className="font-medium">{loading ? "..." : formatCurrency(labaKotor)}</span>
                   </div>
                   <div className="flex justify-between">
-                     <span className="text-sm text-red-600">Pajak ({taxRate * 100}%)</span>
-                     <span className="font-medium text-red-600">{loading ? "..." : formatCurrency(taxAmount)}</span>
+                     <span className="text-sm text-purple-600">Infaq/Zakat ({(zakatRate * 100).toFixed(1)}%)</span>
+                     <span className="font-medium text-purple-600">{loading ? "..." : formatCurrency(zakatAmount)}</span>
                   </div>
                    <div className="flex justify-between border-t pt-2">
                      <span className="font-bold">Laba Bersih</span>
